@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Ay1man2/Wintainium/releases/latest"><img alt="Latest release" src="https://img.shields.io/badge/release-v0.1.0-cba6f7"></a>
+  <a href="https://github.com/Ay1man2/Wintainium/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Ay1man2/Wintainium?label=release&color=cba6f7&cacheSeconds=3600"></a>
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-89b4fa">
   <img alt="Windows PowerShell 5.1 or PowerShell 7" src="https://img.shields.io/badge/PowerShell-5.1%20%7C%207-89b4fa">
   <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-a6e3a1"></a>
