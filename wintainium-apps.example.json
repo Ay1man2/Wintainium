@@ -1,0 +1,136 @@
+[
+  {
+    "name": "PCSX2",
+    "exe": "%APPDATA%\\EmuDeck\\Emulators\\PCSX2-Qt\\pcsx2-qtx64.exe",
+    "source": "github",
+    "repo": "PCSX2/pcsx2",
+    "prerelease": true,
+    "graceDays": 30,
+    "update": [
+      "emudeck",
+      "inapp",
+      "page"
+    ],
+    "emudeckFn": "PCSX2QT_install",
+    "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "DuckStation",
+    "exe": "%APPDATA%\\EmuDeck\\Emulators\\duckstation\\duckstation-qt-x64-ReleaseLTCG.exe",
+    "source": "github",
+    "repo": "stenzek/duckstation",
+    "tag": "latest",
+    "graceDays": 30,
+    "update": [
+      "emudeck",
+      "inapp",
+      "page"
+    ],
+    "emudeckFn": "DuckStation_install",
+    "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "RPCS3",
+    "exe": "%APPDATA%\\EmuDeck\\Emulators\\RPCS3\\rpcs3.exe",
+    "source": "github",
+    "repo": "RPCS3/rpcs3-binaries-win",
+    "graceDays": 30,
+    "update": [
+      "emudeck",
+      "inapp",
+      "page"
+    ],
+    "emudeckFn": "RPCS3_install",
+    "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "xemu",
+    "exe": "%APPDATA%\\EmuDeck\\Emulators\\xemu\\xemu.exe",
+    "source": "github",
+    "repo": "xemu-project/xemu",
+    "update": [
+      "emudeck",
+      "inapp",
+      "page"
+    ],
+    "emudeckFn": "Xemu_install"
+  },
+  {
+    "name": "Vita3K",
+    "exe": "%APPDATA%\\EmuDeck\\Emulators\\Vita3K\\Vita3K.exe",
+    "source": "github",
+    "repo": "Vita3K/Vita3K",
+    "tag": "continuous",
+    "graceDays": 30,
+    "update": [
+      "emudeck",
+      "page"
+    ],
+    "emudeckFn": "Vita3K_install"
+  },
+  {
+    "name": "ES-DE",
+    "exe": "%APPDATA%\\EmuDeck\\EmulationStation-DE\\ES-DE.exe",
+    "source": "gitlab",
+    "api": "https://gitlab.com/api/v4/projects/es-de%2Femulationstation-de/releases/permalink/latest",
+    "update": [
+      "emudeck",
+      "page"
+    ],
+    "emudeckFn": "ESDE_install"
+  },
+  {
+    "name": "Steam ROM Manager",
+    "exe": "C:\\Emulation\\tools\\srm.exe",
+    "source": "github",
+    "repo": "SteamGridDB/steam-rom-manager",
+    "update": [
+      "emudeck",
+      "page"
+    ],
+    "emudeckFn": "SRM_install"
+  },
+  {
+    "name": "ScummVM",
+    "exe": "%APPDATA%\\EmuDeck\\Emulators\\ScummVM\\scummvm.exe",
+    "source": "github",
+    "repo": "scummvm/scummvm",
+    "update": [
+      "zip",
+      "page"
+    ],
+    "downloadUrl": "https://downloads.scummvm.org/frs/scummvm/{version}/scummvm-{version}-win32-x86_64.zip",
+    "note": "EmuDeck pins an old build, so this installs from scummvm.org"
+  },
+  {
+    "name": "Vibepollo",
+    "exe": "C:\\Program Files\\Apollo\\sunshine.exe",
+    "source": "github",
+    "repo": "Nonary/Vibepollo",
+    "update": [
+      "installer",
+      "page"
+    ],
+    "asset": "(?i)\\.(exe|msi)$"
+  },
+  {
+    "name": "A Codeberg or Forgejo tool",
+    "exe": "%USERPROFILE%\\Wintainium\\Apps\\SomeTool\\SomeTool.exe",
+    "source": "gitea",
+    "api": "https://codeberg.org/api/v1/repos/OWNER/REPO/releases/latest",
+    "update": [
+      "zip",
+      "page"
+    ],
+    "asset": "(?i)windows.*\\.zip$"
+  },
+  {
+    "name": "An itch.io game",
+    "exe": "%USERPROFILE%\\Wintainium\\Apps\\SomeGame\\SomeGame.exe",
+    "source": "itch",
+    "url": "https://example.itch.io/some-game",
+    "update": [
+      "page"
+    ]
+  }
+]

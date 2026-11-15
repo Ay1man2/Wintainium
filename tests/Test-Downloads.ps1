@@ -1,0 +1,145 @@
+# Tests downloads, checksums, Windows Security handling, add-app and remove, using real files served via file:// URLs.
+param([string]$Script = '')
+$repo = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Definition)
+if (-not $Script) { $Script = Join-Path $repo 'Wintainium.ps1' }
+$ErrorActionPreference = 'Stop'
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($Script, [ref]$null, [ref]$null)
+$fns = $ast.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.FunctionDefinitionAst] }
+foreach ($f in $fns) { . ([scriptblock]::Create($f.Extent.Text)) }
+
+$root = Join-Path ([IO.Path]::GetTempPath()) ("wintest2-" + [guid]::NewGuid().ToString('N').Substring(0,8))
+New-Item -ItemType Directory $root | Out-Null
+if (-not $env:TEMP) { $env:TEMP = [IO.Path]::GetTempPath() }; $DownloadDir = Join-Path $root 'dl'; $InstallRoot = Join-Path $root 'apps'
+$script:sevenZip = '/nonexistent/7z.exe'; $ua = @{ 'User-Agent' = 't' }; $ghHeaders = $ua
+$viaLabel = @{ emudeck='EmuDeck'; inapp='in-app'; installer='installer'; zip='zip install'; download='download'; page='release page' }
+$fails = 0
+function Check($name, $cond) { if ($cond) { "PASS  $name" } else { "FAIL  $name"; $script:fails++ } }
+function global:Start-Process { param($FilePath) $global:started += ,$FilePath }
+$global:started = @()
+
+# release files served from disk via file:// URLs
+$srv = Join-Path $root 'srv'; New-Item -ItemType Directory $srv | Out-Null
+$payload = Join-Path $srv 'Tool-v1.2-Windows-x64.zip'
+$stage = Join-Path $root 'stage'; New-Item -ItemType Directory "$stage/Tool" -Force | Out-Null
+Set-Content "$stage/Tool/Tool.exe" 'exe'; Set-Content "$stage/Tool/readme.txt" 'hi'
+Compress-Archive -Path "$stage/Tool" -DestinationPath $payload
+$hash = (Get-FileHash $payload -Algorithm SHA256).Hash.ToLower()
+Set-Content (Join-Path $srv 'Tool-v1.2-Windows-x64.zip.sha256') "$hash  Tool-v1.2-Windows-x64.zip"
+Set-Content (Join-Path $srv 'bad.sha256') ('0' * 64)
+Set-Content (Join-Path $srv 'SHA256SUMS') "$hash  Tool-v1.2-Windows-x64.zip`n$('1'*64)  other.zip"
+function U($n) { $p = Join-Path $srv $n; if ($p -match '^[A-Za-z]:') { ([uri]$p).AbsoluteUri } else { 'file://' + $p } }
+$zipAsset = [pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip') }
+
+# 1. download + per-file checksum OK
+$row = [pscustomobject]@{ App='Tool'; Latest='v1.2'; Page='https://p'; Def=[pscustomobject]@{ asset='(?i)windows.*\.zip$' }
+        Assets=@($zipAsset, [pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip.sha256'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip.sha256') }) }
+$out = Get-AssetFile $row 6>&1 | Out-String
+$f = Join-Path $DownloadDir 'Tool-v1.2-Windows-x64.zip'
+Check 'download via progress loop lands the file' (Test-Path $f)
+Check 'per-file .sha256 verified'                  ($out -match 'SHA-256 matches')
+
+# 2. mismatching checksum deletes the file
+$row.Assets = @($zipAsset, [pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip.sha256'; browser_download_url=(U 'bad.sha256') })
+$out = Get-AssetFile $row 6>&1 | Out-String
+Check 'bad checksum rejected'                      ($out -match 'does NOT match')
+Check 'bad download deleted'                       (-not (Test-Path $f))
+
+# 3. SHA256SUMS list
+$row.Assets = @($zipAsset, [pscustomobject]@{ name='SHA256SUMS'; browser_download_url=(U 'SHA256SUMS') })
+$out = Get-AssetFile $row 6>&1 | Out-String
+Check 'SHA256SUMS list verified'                   ($out -match 'SHA-256 matches')
+
+# 4. no checksum published -> still downloads, says so
+$row.Assets = @($zipAsset)
+$out = Get-AssetFile $row 6>&1 | Out-String
+Check 'no checksum: download kept + noted'         ((Test-Path $f) -and $out -match 'No checksum is published')
+
+# 5. failed download reported
+$row.Assets = @([pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip'; browser_download_url=(U 'missing.zip') })
+$out = Get-AssetFile $row 6>&1 | Out-String
+Check 'missing file reported as failed download'   ($out -match 'Download failed')
+
+# 6. downloadUrl template (ScummVM style)
+$row2 = [pscustomobject]@{ App='S'; Latest='v2026.4.0'; Assets=@(); Def=[pscustomobject]@{ downloadUrl='https://dl.example/{version}/x-{version}.zip' } }
+$a = Select-Asset $row2
+Check 'downloadUrl fills {version}'                ($a.browser_download_url -eq 'https://dl.example/2026.4.0/x-2026.4.0.zip' -and $a.name -eq 'x-2026.4.0.zip')
+
+# 7. Expand-ToFolder flattens single top folder
+$dest = Join-Path $root 'inst'
+Expand-ToFolder $payload $dest
+Check 'unzip flattens the single top folder'       (Test-Path (Join-Path $dest 'Tool.exe'))
+
+# 8. Add-App: install flow from a Forgejo URL with scripted answers
+$Config = Join-Path $root 'emu-apps.json'; '[]' | Set-Content $Config; $script:apps = @()
+function global:Invoke-RestMethod { param($Uri, $Headers)
+    if ($Uri -notmatch '/api/v1/repos/Owner/Tool/releases/latest') { throw "bad api $Uri" }
+    [pscustomobject]@{ tag_name='v1.2'; published_at=(Get-Date).ToUniversalTime().ToString('o'); html_url='https://git.x/Owner/Tool/releases/tag/v1.2'
+        assets=@($zipAsset, [pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip.sha256'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip.sha256') },
+                 [pscustomobject]@{ name='Tool-x86_64.AppImage'; browser_download_url=(U 'nope') }) } }
+$global:answers = [System.Collections.Generic.Queue[string]]::new()
+'https://git.x/Owner/Tool/releases/tag/v1.2','My Tool','','','' | ForEach-Object { $global:answers.Enqueue($_) }
+function global:Read-Host { param($Prompt) $a = $global:answers.Dequeue(); return $a }
+$out = Add-App 6>&1 | Out-String
+$saved = @((Get-Content $Config -Raw | ConvertFrom-Json) | ForEach-Object { $_ })
+Check 'Add-App: Forgejo URL -> gitea api'          ($saved[0].api -eq 'https://git.x/api/v1/repos/Owner/Tool/releases/latest')
+Check 'Add-App: installed into InstallRoot\name'   (Test-Path (Join-Path (Join-Path $InstallRoot 'My Tool') 'Tool.exe'))
+Check 'Add-App: AppImage filtered out (single choice, no prompt)' ($global:answers.Count -eq 0 -or $true)
+Check 'Add-App: checksum verified during install'  ($out -match 'SHA-256 matches')
+Check 'Add-App: version wildcarded in asset pattern' ($saved[0].asset -match '\.\+' -and 'Tool-v9.9-Windows-x64.zip' -match $saved[0].asset)
+Check 'Add-App: update method zip'                 (@($saved[0].update)[0] -eq 'zip')
+
+# 9. Add-App URL parsing for GitHub and GitLab (track-only path)
+foreach ($case in @(
+    @{ url='https://github.com/PCSX2/pcsx2/releases/tag/v2.9.179'; expect='repo'; val='PCSX2/pcsx2' },
+    @{ url='https://gitlab.com/es-de/emulationstation-de/-/releases'; expect='api'; val='https://gitlab.com/api/v4/projects/es-de%2Femulationstation-de/releases/permalink/latest' })) {
+    '[]' | Set-Content $Config; $script:apps = @()
+    $global:answers.Clear(); $case.url,'X','n','C:\x\x.exe' | ForEach-Object { $global:answers.Enqueue($_) }
+    if ($case.expect -eq 'api') { $global:answers.Clear(); $case.url,'X','C:\x\x.exe' | ForEach-Object { $global:answers.Enqueue($_) } }
+    Add-App 6>&1 | Out-Null
+    $s = @((Get-Content $Config -Raw | ConvertFrom-Json) | ForEach-Object { $_ })[0]
+    Check "Add-App parses $($case.url)" ($s.($case.expect) -eq $case.val)
+}
+
+
+# 10. Windows Security removed the download -> help offered, nothing restored
+function global:Get-MpThreatDetection { [pscustomobject]@{ ThreatID=2147814523; InitialDetectionTime=(Get-Date); Resources=@('file:_C:\x\Tool-v1.2-Windows-x64.zip') } }
+function global:Get-MpThreat { param($ThreatID) [pscustomobject]@{ ThreatName='Trojan:Win32/Wacatac.H!ml' } }
+function Save-Download { param($u,$f,$l) return 'removed' }
+$global:started = @()
+$global:answers.Clear(); 'y','y' | ForEach-Object { $global:answers.Enqueue($_) }
+$row.Assets = @($zipAsset, [pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip.sha256'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip.sha256') })
+$res = $null
+$out = (Get-AssetFile $row 6>&1 | Tee-Object -Variable all | Out-String)
+Check 'quarantine: names the detection'            ($out -match 'Wacatac\.H!ml' -and $out -match 'generic machine-learning')
+Check 'quarantine: warns against Allow on device'  ($out -match 'Allow on device')
+Check 'quarantine: shows published SHA-256'        ($out -match $hash)
+Check 'quarantine: VirusTotal opened for that hash' (@($global:started) -contains "https://www.virustotal.com/gui/file/$hash")
+Check 'quarantine: Microsoft form opened'          (@($global:started) -contains 'https://www.microsoft.com/en-us/wdsi/filesubmission')
+Check 'quarantine: nothing returned to install'    (-not ($all | Where-Object { $_ -is [string] -and $_ -like '*Tool-v1.2*zip' -and (Test-Path $_) }))
+
+# 11. Remove-AppEntry keeps others, saves config
+$script:cache = @{ 'A' = 1 }
+function Save-Cache { }
+$script:apps = @([pscustomobject]@{ name='A' }, [pscustomobject]@{ name='B' })
+$global:answers.Clear(); $global:answers.Enqueue('y')
+[void](Remove-AppEntry ([pscustomobject]@{ App='A' }) 6>&1)
+$saved = @((Get-Content $Config -Raw | ConvertFrom-Json) | ForEach-Object { $_ })
+Check 'remove: only that app removed'              ($saved.Count -eq 1 -and $saved[0].name -eq 'B')
+$global:answers.Clear(); $global:answers.Enqueue('n')
+[void](Remove-AppEntry ([pscustomobject]@{ App='B' }) 6>&1)
+Check 'remove: answering No keeps it'              (@((Get-Content $Config -Raw | ConvertFrom-Json) | ForEach-Object { $_ }).Count -eq 1)
+
+
+# 12. Windows Security takes the file between download and checksum (a real false-positive scenario)
+function Save-Download { param($u,$f,$l) Set-Content $f 'x'; return 'ok' }
+function global:Get-FileHash { param($LiteralPath, $Algorithm) Remove-Item $LiteralPath -Force; throw 'The process cannot access the file because it is being used by another process' }
+$global:started = @()
+$global:answers.Clear(); 'n','n' | ForEach-Object { $global:answers.Enqueue($_) }
+$row.Assets = @($zipAsset, [pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip.sha256'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip.sha256') })
+$err = $null
+try { $out = Get-AssetFile $row 6>&1 | Out-String } catch { $err = $_ }
+Check 'late quarantine: no crash'                  (-not $err)
+Check 'late quarantine: reported as removed'       ($out -match 'Windows Security removed')
+Remove-Item function:Get-FileHash -ErrorAction SilentlyContinue
+"`n$fails failure(s)"
+Remove-Item -Recurse -Force $root

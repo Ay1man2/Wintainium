@@ -1,0 +1,9 @@
+# your own app list, release cache and GitHub token (encrypted, but still personal)
+wintainium-apps.json
+wintainium-cache.json
+wintainium-token.xml
+emu-apps.json
+emu-cache.json
+emu-token.xml
+# output of Find-Sources.ps1
+sources-inventory.csv

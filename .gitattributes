@@ -1,0 +1,11 @@
+# Windows project: check text files out with Windows line endings
+* text=auto
+*.ps1  text eol=crlf
+*.json text eol=crlf
+*.md   text eol=crlf
+*.svg  text eol=crlf
+.gitignore     text eol=crlf
+.gitattributes text eol=crlf
+# binaries
+*.ico binary
+*.png binary
