@@ -38,6 +38,7 @@ It is one PowerShell script with a dark, sortable window (or a console menu if y
 - **Honest about antivirus:** if Windows Security removes a download, Wintainium shows the detection name and the published hash, and offers a VirusTotal lookup and Microsoft's false-positive form. It never restores files, allows threats or adds exclusions on its own.
 - **Window:** search, an "only show updates" filter, release notes ("What's new"), Launch, Open folder, a right-click menu, double-click to update, and F5 to refresh.
 - **Add apps from a URL:** paste a GitHub, GitLab, Forgejo or itch.io link. Wintainium can track a copy you already have, or install a fresh one.
+- **Mods and data packs too:** a release with no program inside (a widescreen patch, a texture pack) is tracked by the release you installed, and flagged when a newer one is published.
 - **Light on GitHub's rate limit:** lookups are cached for an hour, and an optional token is stored encrypted with Windows DPAPI.
 - **`Find-Sources.ps1`:** a read-only scan that lists everything on your PC that came from a code-hosting site (downloads, git clones, untracked programs, mods), so nothing gets missed.
 
@@ -92,7 +93,7 @@ Apps live in `wintainium-apps.json` next to the script. It is created empty on f
 | Field | Meaning |
 |---|---|
 | `name` | Display name |
-| `exe` | The installed program. Its version and date are compared with the latest release |
+| `exe` | The installed program. Its version and date are compared with the latest release. For a mod, one of its files (used to spot a missing install) |
 | `source` | `github`, `gitea` (also Forgejo/Codeberg), `gitlab`, `itch`, `dolphin` or `manual` |
 | `repo` | `owner/name` for GitHub |
 | `api` | Release API URL for `gitea`, `gitlab` and `dolphin` |
@@ -105,7 +106,9 @@ Apps live in `wintainium-apps.json` next to the script. It is created empty on f
 | `downloadUrl` | Download URL template with `{version}`, for projects that host files elsewhere |
 | `emudeckFn` | EmuDeck install function, such as `PCSX2QT_install` |
 | `launch` | Program or script to start for `inapp` updates, if not the exe |
-| `hint` | Shown when using `inapp`, for example "Help > Check for Updates" |
+| `hint` | Shown when using `inapp` or after a `zip` update, for example "Help > Check for Updates" |
+| `installedTag` | For mods and data packs: the release tag that is installed. Status compares it with the latest tag instead of reading the exe, and `zip` updates record the new one |
+| `installDir` | For mods and data packs: the folder `zip` updates unpack into, and that Launch and Open folder use |
 
 ## GitHub token (optional)
 
@@ -131,6 +134,7 @@ The scan reads Windows' download records, git remotes and emulator folders, then
 - itch.io has no public release API, so the version is read from the game's page and updates open that page.
 - The `emudeck` method calls EmuDeck's own scripts from `%APPDATA%\EmuDeck\backend`. Where EmuDeck pins an old build (ScummVM at the time of writing), use `zip` with the project's own releases.
 - `zip` updates replace the files a release contains. Your settings normally live outside those files, and the folder is backed up first.
+- To track a mod, add its repo and either let Wintainium install it, or give the mod's folder when asked for the .exe. If the mod is loaded from another program's folder (an emulator's mod folder, say), set `installDir` to that folder so updates land where they are used.
 
 ## Tests
 

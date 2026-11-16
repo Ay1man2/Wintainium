@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.1 - 2026-11-16
+
+### Added
+- Mods and data packs: releases with no program inside can be added and tracked. Add app asks whether a download without an .exe is a mod, or takes a mod's folder in place of an .exe for something already installed.
+- New app-list fields `installedTag` (the release that is installed) and `installDir` (where zip updates unpack). Apps with `installedTag` are compared by release tag, and each zip update records the new tag.
+
+### Fixed
+- Add app said "Nothing was unpacked" for downloads whose files sit in subfolders with no .exe.
+- Launch on a mod opens its folder instead of trying to run a data file, and Open folder uses `installDir`.
+- `hint` is also shown after a zip update.
+
 ## v0.1.0 - 2026-11-15
 
 First public release.

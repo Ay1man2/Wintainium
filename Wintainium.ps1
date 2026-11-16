@@ -11,6 +11,7 @@
     zip        downloads the new archive, backs up the app folder, unpacks over it
     download   downloads the new file and shows it in Explorer
     page       opens the release page
+  Mods and data packs (no program inside) are tracked by the release tag that is installed.
   Apps and their update methods live in wintainium-apps.json next to this script
   (see wintainium-apps.example.json).
 
@@ -41,7 +42,7 @@ param(
     [int]$CacheMinutes = 60
 )
 
-$script:AppVersion = '0.1.0'
+$script:AppVersion = '0.1.1'
 
 # The script's own folder. Windows PowerShell 5.1 leaves $PSScriptRoot empty while the
 # param() defaults are evaluated when started with -File (as the shortcut does), so resolve it here.
@@ -253,6 +254,10 @@ function Get-AppRows([switch]$Force) {
 
         if (-not $found) {
             $status = 'exe not found'
+        } elseif ($latest -and $app.installedTag) {
+            # mods and data packs have no program to read a version from, so compare the
+            # release that was installed (recorded by add app and by each zip update)
+            $status = if ([string]$latest.Tag -eq [string]$app.installedTag) { 'up to date' } else { 'UPDATE' }
         } elseif ($latest) {
             $grace = if ($app.graceDays) { [int]$app.graceDays } else { $GraceDays }
             $num = ([string]$latest.Tag) -replace '^[^\d]*', ''
@@ -270,7 +275,7 @@ function Get-AppRows([switch]$Force) {
         [pscustomobject]@{
             App       = [string]$app.name
             Status    = $status
-            Installed = if ($installedVer) { $installedVer } elseif ($exeUtc) { $exeUtc.ToLocalTime().ToString('yyyy-MM-dd') } else { '' }
+            Installed = if ($installedVer) { $installedVer } elseif ($app.installedTag) { [string]$app.installedTag } elseif ($exeUtc) { $exeUtc.ToLocalTime().ToString('yyyy-MM-dd') } else { '' }
             Latest    = if ($latest) { [string]$latest.Tag } else { '' }
             Released  = if ($latest -and $latest.Date) { $latest.Date.ToLocalTime().ToString('yyyy-MM-dd') } else { '' }
             Methods   = $methods
@@ -555,27 +560,47 @@ function Expand-ToFolder([string]$file, [string]$dir) {
     Remove-Item -LiteralPath $tmp -Recurse -Force
 }
 
+# The folder an app lives in. Mods and data packs set "installDir", because the file
+# they are tracked by can sit a few folders deep (e.g. <mod>\patches\<file>.ips).
+function Get-AppFolder($row) {
+    if ($row.Def -and $row.Def.installDir) { return [Environment]::ExpandEnvironmentVariables([string]$row.Def.installDir) }
+    return (Split-Path -Path $row.Exe -Parent)
+}
+
+# Records the release now installed, for apps tracked by release tag (mods, data packs).
+function Save-InstalledTag($row) {
+    $app = $script:apps | Where-Object { [string]$_.name -eq [string]$row.App } | Select-Object -First 1
+    if (-not $app -or -not $row.Latest) { return }
+    $app | Add-Member -NotePropertyName installedTag -NotePropertyValue ([string]$row.Latest) -Force
+    ConvertTo-Json -InputObject @($script:apps) -Depth 6 | Set-Content -LiteralPath $Config -Encoding UTF8
+}
+
+# Returns $true when the new files were unpacked.
 function Install-Zip($row, [string]$file) {
-    $dir = Split-Path -Path $row.Exe -Parent
+    $dir = Get-AppFolder $row
     if (-not (Test-Archive $file)) {
         Write-Host "  I cannot unpack this file type here. It is saved at: $file" -ForegroundColor Yellow
         Start-Process explorer.exe "/select,`"$file`""
-        return
+        return $false
     }
-    $procName = [IO.Path]::GetFileNameWithoutExtension($row.Exe)
-    if (Get-Process -Name $procName -ErrorAction SilentlyContinue) {
-        Write-Host "  $($row.App) is running. Close it and try again." -ForegroundColor Red
-        return
+    if ([IO.Path]::GetExtension($row.Exe) -ieq '.exe') {
+        $procName = [IO.Path]::GetFileNameWithoutExtension($row.Exe)
+        if (Get-Process -Name $procName -ErrorAction SilentlyContinue) {
+            Write-Host "  $($row.App) is running. Close it and try again." -ForegroundColor Red
+            return $false
+        }
     }
     $backup = "$dir.backup-$(Get-Date -Format 'yyyyMMdd-HHmm')"
     Write-Host "  This will back up $dir"
     Write-Host "                 to $backup"
     Write-Host '  and then unpack the new files over the original folder.'
-    if ((Read-Host '  Continue? (y/N)') -notmatch '^y') { Write-Host '  Cancelled.'; return }
+    if ((Read-Host '  Continue? (y/N)') -notmatch '^y') { Write-Host '  Cancelled.'; return $false }
 
     Copy-Item -LiteralPath $dir -Destination $backup -Recurse
     Expand-ToFolder $file $dir
     Write-Host "  Done. If anything is wrong, delete $dir and rename the backup back." -ForegroundColor Green
+    if ($row.Def.hint) { Write-Host "  Then: $($row.Def.hint)" }
+    return $true
 }
 
 function Invoke-Method($row, [string]$method, [switch]$Yes) {
@@ -602,7 +627,7 @@ function Invoke-Method($row, [string]$method, [switch]$Yes) {
         }
         'zip' {
             $file = Get-AssetFile $row
-            if ($file) { Install-Zip $row $file }
+            if ($file -and (Install-Zip $row $file) -and $row.Def.installedTag) { Save-InstalledTag $row }
         }
         'download' {
             $file = Get-AssetFile $row
@@ -635,6 +660,13 @@ function Update-App($row) {
 function Start-App($row) {
     $start = $row.Exe
     if ($row.Def.launch) { $start = [Environment]::ExpandEnvironmentVariables([string]$row.Def.launch) }
+    elseif ([IO.Path]::GetExtension($start) -notmatch '(?i)^\.(exe|bat|cmd|lnk)$') {
+        # a mod or data pack has nothing to run, so show its folder instead
+        $dir = Get-AppFolder $row
+        if (Test-Path -LiteralPath $dir) { Write-Host "  $($row.App) has no program to start. Opening its folder."; Start-Process explorer.exe "`"$dir`"" }
+        else { Write-Host "  Folder not found: $dir" -ForegroundColor Red }
+        return
+    }
     if (-not (Test-Path -LiteralPath $start)) { Write-Host "  Not found: $start" -ForegroundColor Red; return }
     Write-Host "  Starting $($row.App)."
     Start-Process -FilePath $start -WorkingDirectory (Split-Path -Path $start -Parent)
@@ -710,8 +742,20 @@ function Add-App {
         Write-Host "  Added $name. Updates open its itch.io page." -ForegroundColor Green
         return
     }
-    $exe = (Read-Host '  Path to its .exe if it is already installed (Enter = install it now)').Trim().Trim('"')
-    if ($exe) {
+    $exe = (Read-Host '  Path to its .exe (or a mod''s folder) if it is already installed (Enter = install it now)').Trim().Trim('"')
+    if ($exe -and (Test-Path -LiteralPath $exe -PathType Container)) {
+        # an installed mod or data pack: track the folder by release
+        try { $latest = Get-LatestRelease ([pscustomobject]$def) }
+        catch { Write-Host "  Could not read the releases: $($_.Exception.Message)" -ForegroundColor Red; return }
+        $all = @(Get-ChildItem -LiteralPath $exe -Recurse -File | Sort-Object FullName)
+        if ($all.Count -eq 0) { Write-Host '  That folder is empty, so I am not adding it.' -ForegroundColor Red; return }
+        $ips = @($all | Where-Object { $_.Extension -ieq '.ips' })
+        $def.exe = if ($ips.Count) { $ips[0].FullName } else { $all[0].FullName }
+        $def.installDir = $exe
+        $same = Read-Host "  Is the latest release ($($latest.Tag)) the one in that folder? (Y/n)"
+        $def.installedTag = if ($same -match '^n') { 'unknown' } else { [string]$latest.Tag }
+        $def.update = @('zip', 'page')
+    } elseif ($exe) {
         $def.exe = $exe
         $def.update = @('download', 'page')
     } else {
@@ -743,8 +787,21 @@ function Add-App {
 
         # choose the file whose date/version tells us what is installed
         $cands = @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter *.exe)
-        if ($cands.Count -eq 0) { $cands = @(Get-ChildItem -LiteralPath $dir -File) }
-        if ($cands.Count -eq 0) { Write-Host '  Nothing was unpacked, so I am not adding it.' -ForegroundColor Red; return }
+        $isData = $false
+        if ($cands.Count -eq 0) {
+            $all = @(Get-ChildItem -LiteralPath $dir -Recurse -File | Sort-Object FullName)
+            if ($all.Count -eq 0) { Write-Host '  Nothing was unpacked, so I am not adding it.' -ForegroundColor Red; return }
+            if ((Read-Host '  There is no .exe in it. Is it a mod or data pack, to track by release? (Y/n)') -notmatch '^n') {
+                # nothing to read a version from: remember the release instead, and one of its
+                # files so a missing install still shows up
+                $isData = $true
+                $ips = @($all | Where-Object { $_.Extension -ieq '.ips' })
+                $cands = @(if ($ips.Count) { $ips[0] } else { $all[0] })
+            } else {
+                $cands = @(Get-ChildItem -LiteralPath $dir -File)
+                if ($cands.Count -eq 0) { Write-Host '  No program file at the top of that folder, so I am not adding it.' -ForegroundColor Red; return }
+            }
+        }
         $main = $cands[0]
         if ($cands.Count -gt 1) {
             Write-Host '  Which file is the main program?'
@@ -766,6 +823,11 @@ function Add-App {
         if ($ver) { $pattern = $pattern.Replace([regex]::Escape($ver), '.+') }
         $def.asset = $pattern
         $def.update = @($method, 'page')
+        if ($isData) {
+            $def.installDir = $dir
+            $def.installedTag = [string]$latest.Tag
+            Write-Host "  Tracking it by release: $($latest.Tag) is installed. Wintainium flags the next one." -ForegroundColor Cyan
+        }
     }
 
     $script:apps = @($script:apps) + ([pscustomobject]$def)
@@ -1261,7 +1323,7 @@ STYLES
     $script:ui.BtnFolder.Add_Click({
         $r = Get-Selected
         if ($r) {
-            $dir = Split-Path -Path $r.Exe -Parent
+            $dir = Get-AppFolder $r
             if (Test-Path -LiteralPath $dir) { Start-Process explorer.exe "`"$dir`"" }
             else { Write-Host "Folder not found: $dir" -ForegroundColor Red }
         }
@@ -1289,7 +1351,7 @@ STYLES
             @{ h = 'Launch'; a = { $r = Get-Selected; if ($r) { Start-App $r } } },
             @{ h = '-' },
             @{ h = 'Open release page'; a = { $r = Get-Selected; if ($r -and $r.Page) { Start-Process $r.Page } } },
-            @{ h = 'Open folder'; a = { $r = Get-Selected; if ($r) { $dir = Split-Path -Path $r.Exe -Parent; if (Test-Path -LiteralPath $dir) { Start-Process explorer.exe "`"$dir`"" } } } },
+            @{ h = 'Open folder'; a = { $r = Get-Selected; if ($r) { $dir = Get-AppFolder $r; if (Test-Path -LiteralPath $dir) { Start-Process explorer.exe "`"$dir`"" } } } },
             @{ h = '-' },
             @{ h = 'Remove from list...'; a = { $r = Get-Selected; if ($r) { Invoke-Busy 'Removing...' { if (Remove-AppEntry $r) { Update-Grid } } } } })) {
         if ($item.h -eq '-') { [void]$menu.Items.Add((New-Object System.Windows.Controls.Separator)); continue }

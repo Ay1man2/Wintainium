@@ -132,5 +132,19 @@
     "update": [
       "page"
     ]
+  },
+  {
+    "name": "A widescreen mod",
+    "exe": "%USERPROFILE%\\Mods\\Widescreen\\Widescreen 21x9\\patches\\0123ABCD.ips",
+    "installDir": "%USERPROFILE%\\Mods\\Widescreen",
+    "installedTag": "v1.0",
+    "source": "github",
+    "repo": "someone/game-widescreen-mod",
+    "asset": "(?i)21x9.*\\.zip$",
+    "update": [
+      "zip",
+      "page"
+    ],
+    "hint": "Re-enable the mod in the game's mod manager if it asks"
   }
 ]
