@@ -12,3 +12,4 @@ wintainium-settings.json
 # release builds (build\Build-Release.ps1)
 dist/
 *.exe
+installed-version.txt

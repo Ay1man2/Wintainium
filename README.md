@@ -39,7 +39,7 @@ It is one PowerShell script with a dark, sortable window (or a console menu if y
 - **Window:** search, an "only show updates" filter, release notes ("What's new"), Launch, Open folder, a right-click menu, double-click to update, and F5 to refresh.
 - **Add apps from a URL:** paste a GitHub, GitLab, Forgejo or itch.io link. Wintainium can track a copy you already have, or install a fresh one.
 - **Mods and data packs too:** a release with no program inside (a widescreen patch, a texture pack) is tracked by the release you installed, and flagged when a newer one is published.
-- **Easy start:** download the zip, double-click `Wintainium.exe`, and a short setup wizard asks where new apps should go, walks you through an optional no-permission GitHub token, finds the apps you already have, and adds shortcuts.
+- **Easy start:** download one file, `Wintainium.exe`, and double-click it. It installs itself for your user (no admin rights), and a short setup wizard asks where new apps should go, walks you through an optional no-permission GitHub token, finds the apps you already have, and adds shortcuts.
 - **Scan your PC:** the **Scan** button finds emulators and tools Wintainium recognizes at their usual paths, plus programs whose files came from GitHub, GitLab, Codeberg or itch.io, and adds the ones you tick in one go. Read-only until you click Add.
 - **Light on GitHub's rate limit:** lookups are cached for an hour, and an optional token is stored encrypted with Windows DPAPI. If a site is briefly down, the last known version is shown instead of an error.
 - **`Find-Sources.ps1`:** a read-only scan that lists everything on your PC that came from a code-hosting site (downloads, git clones, untracked programs, mods), so nothing gets missed.
@@ -54,7 +54,7 @@ Wintainium is an **unsigned PowerShell script that downloads and runs other prog
 
 What it does to keep that reasonable:
 
-- **Readable:** all the logic is in two PowerShell scripts, with no obfuscation and no telemetry. It only talks to the release sources you add, plus GitHub's API. The only compiled file is `Wintainium.exe` in the release zip, a short launcher that starts `Wintainium.ps1`; its source is in [`launcher/`](launcher/WintainiumLauncher.cs), and you can skip it and run the script directly.
+- **Readable:** all the logic is in two PowerShell scripts, with no obfuscation and no telemetry. It only talks to the release sources you add, plus GitHub's API. The only compiled file is `Wintainium.exe`, a short launcher that carries a copy of the scripts, installs them, and starts `Wintainium.ps1`; its source is in [`launcher/`](launcher/WintainiumLauncher.cs), and you can skip it and run the script directly.
 - **Verified downloads:** where a release publishes a SHA-256 checksum, the download is checked against it and deleted on a mismatch.
 - **SmartScreen stays in the loop:** downloads keep Windows' "downloaded from the internet" mark, so Windows still checks them before they run.
 - **Hands off your security settings:** it never restores quarantined files, allows threats, or adds Defender exclusions. When Windows Security removes something, it explains why and leaves the decision to you.
@@ -62,18 +62,22 @@ What it does to keep that reasonable:
 
 A safe way to start is `.\Wintainium.ps1 list`, which only reads and prints the status table.
 
-`Wintainium.exe` isn't code-signed, so the first time you open it Windows SmartScreen may say "Windows protected your PC". Click **More info** and then **Run anyway** if you're comfortable, or run the script yourself instead.
+`Wintainium.exe` isn't code-signed, so the first time you open it Windows SmartScreen may say "Windows protected your PC". Click **More info** and then **Run anyway** if you're comfortable, or run the script yourself instead. Because it writes its scripts to disk and starts PowerShell, an antivirus may also be wary of it; the portable zip and running the script directly are there if you'd rather avoid the exe. Each release lists the SHA-256 of every file.
 
 ## Install
 
 Windows 10 or 11. Everything it needs (Windows PowerShell 5.1 and .NET Framework 4) is built in.
 
-**Easiest:**
+**Easiest: one file**
 
-1. From the [latest release](https://github.com/Ay1man2/Wintainium/releases/latest), download **`Wintainium-<version>.zip`** under Assets (not "Source code").
-2. Unzip it to a folder you'll keep, for example `Documents\Wintainium`. Your app list and settings are saved in that folder.
-3. Double-click **`Wintainium.exe`**. If SmartScreen appears, see [Before you run it](#before-you-run-it).
+1. Download **[`Wintainium.exe`](https://github.com/Ay1man2/Wintainium/releases/latest/download/Wintainium.exe)** (from the [latest release](https://github.com/Ay1man2/Wintainium/releases/latest), under Assets).
+2. Double-click it. If SmartScreen appears, see [Before you run it](#before-you-run-it).
+3. It installs itself to `%LOCALAPPDATA%\Programs\Wintainium` for your user only (no admin rights needed) and opens. You can delete the file you downloaded.
 4. The setup wizard asks where new apps should go, offers the optional [GitHub token](#github-token-optional), scans for apps you already have, and adds Desktop and Start menu shortcuts. Pin Wintainium by right-clicking its taskbar button while it's open. Reopen the wizard any time with **Setup**.
+
+Your app list, settings and token are saved in the install folder. **Updating:** Wintainium tracks itself, so when a new version is out, update it like any other app (or just run a newer `Wintainium.exe`); your list is kept. **Uninstalling:** Settings > Apps > Installed apps > Wintainium > Uninstall. It asks whether to keep your list for later, and never touches the apps it tracks.
+
+**Portable:** download **`Wintainium-<version>-portable.zip`** instead, unzip it to a folder you'll keep, and double-click `Wintainium.exe` there. It runs from that folder and installs nothing; your list and settings are saved next to it.
 
 **From the source:**
 
@@ -166,9 +170,9 @@ It writes `sources-inventory.csv` to your Desktop and never changes anything.
 .\tests\Run-Tests.ps1
 ```
 
-It runs every suite under each PowerShell installed (Windows PowerShell 5.1 and PowerShell 7 on Windows). The suites mock the release servers and Windows-only parts, so they also run under PowerShell 7 on Linux and macOS. They cover status detection, every release source, the cache and its fallback when a site is down, error messages, GitHub token checks, the settings file, scan results and recognized apps, downloads, checksums, quarantine handling, add-app, remove, and starting the script the way the desktop shortcut does. The WPF window, the setup wizard, the scan window and the .exe launcher are not covered.
+It runs every suite under each PowerShell installed (Windows PowerShell 5.1 and PowerShell 7 on Windows). The suites mock the release servers and Windows-only parts, so they also run under PowerShell 7 on Linux and macOS. They cover status detection, every release source, the cache and its fallback when a site is down, error messages, GitHub token checks, the settings file, scan results and recognized apps, downloads, checksums, quarantine handling, add-app, remove, starting the script the way the desktop shortcut does, and the one-file `Wintainium.exe` (install, update, no downgrade, leaving zip folders and clones alone; compiled with Windows' own C# compiler, or Mono's elsewhere). The WPF window, the setup wizard, the scan window, the Settings > Apps entry and uninstall are not covered.
 
-To build the release download (runs the tests, compiles `Wintainium.exe` with the C# compiler built into Windows, and writes `dist\Wintainium-<version>.zip` and its `.sha256`):
+To build the release downloads (runs the tests, compiles `Wintainium.exe` with the scripts inside using the C# compiler built into Windows, and writes `dist\Wintainium.exe`, `dist\Wintainium-<version>-portable.zip` and a `.sha256` for each):
 
 ```powershell
 .\build\Build-Release.ps1

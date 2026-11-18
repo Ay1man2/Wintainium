@@ -257,9 +257,18 @@ if (-not (Test-TrackedRepo $selfRepo)) {
     $selfExe = Join-Path $script:Here 'Wintainium.exe'
     if (-not (Test-Path -LiteralPath $selfExe)) { $selfExe = Join-Path $script:Here 'Wintainium.ps1' }
     if (Test-Path -LiteralPath $selfExe) {
-        $selfDef = [pscustomobject][ordered]@{
-            name = 'Wintainium'; exe = $selfExe; source = 'github'; repo = $selfRepo; update = @('page')
-            hint = 'Close Wintainium, then unpack the new zip over this folder. Your list, settings and token are kept.'
+        if (Test-Path -LiteralPath (Join-Path $script:Here 'installed-version.txt')) {
+            # installed by Wintainium.exe: update by downloading the new Wintainium.exe (checked
+            # against its published SHA-256) and running it; it asks you to close Wintainium first
+            $selfDef = [pscustomobject][ordered]@{
+                name = 'Wintainium'; exe = $selfExe; source = 'github'; repo = $selfRepo; update = @('installer', 'page'); asset = '^Wintainium\.exe$'
+                hint = 'Run the new Wintainium.exe when asked, close Wintainium when it says so, and it reopens updated. Your list, settings and token are kept.'
+            }
+        } else {
+            $selfDef = [pscustomobject][ordered]@{
+                name = 'Wintainium'; exe = $selfExe; source = 'github'; repo = $selfRepo; update = @('page')
+                hint = 'Close Wintainium, then unpack the new portable zip over this folder (or git pull). Your list, settings and token are kept.'
+            }
         }
         Add-Row 'Known' 'Wintainium' "$selfRepo (GitHub)" $selfRepo $false $selfExe 'this app' '' $selfDef
     }
