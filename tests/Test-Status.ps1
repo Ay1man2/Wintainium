@@ -29,6 +29,11 @@ $cfg = @(
   @{ name='Broken';   exe=(New-FakeExe 'a/brk.exe'   $new);  source='github'; repo='o/broken'; update=@('page') },
   @{ name='Limited';  exe=(New-FakeExe 'a/lim.exe'   $new);  source='github'; repo='o/limited'; update=@('page') }
 )
+# Wintainium's own entry: the script knows its version, so a 60-day-old file is still current
+$self = Join-Path $work 'Wintainium.ps1'; (Get-Item $self).LastWriteTime = $old
+$selfVer = [regex]::Match((Get-Content -Raw $self), "AppVersion = '([\d.]+)'").Groups[1].Value
+$cfg += @{ name='Self'; exe=$self; source='github'; repo='o/self'; update=@('page') }
+$cfg += @{ name='SelfOld'; exe=$self; source='github'; repo='o/selfnext'; update=@('page') }
 $cfg | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $work 'wintainium-apps.json')
 
 # --- mocked network --------------------------------------------------------
@@ -39,6 +44,8 @@ function global:Invoke-RestMethod {
     $d = (Get-Date).ToUniversalTime().ToString('o')
     switch -Regex ([string]$Uri) {
         'o/ghold/releases/latest' { return [pscustomobject]@{ tag_name='v2.0'; published_at=$d; html_url='https://gh/ghold'; body='notes'; assets=@([pscustomobject]@{name='ghold-2.0-win64.zip'; browser_download_url='https://dl/ghold-2.0-win64.zip'; updated_at=$d}) } }
+        'o/self/releases/latest' { return [pscustomobject]@{ tag_name="v$selfVer"; published_at=$d; html_url='https://gh/self'; assets=@() } }
+        'o/selfnext/releases/latest' { return [pscustomobject]@{ tag_name='v9.0.0'; published_at=(Get-Date).AddDays(-1).ToUniversalTime().ToString('o'); html_url='https://gh/selfnext'; assets=@() } }
         'o/ghnew/releases/latest' { return [pscustomobject]@{ tag_name='v1.0'; published_at=(Get-Date).AddDays(-10).ToUniversalTime().ToString('o'); html_url='https://gh/ghnew'; assets=@() } }
         'o/roll/releases/tags/latest' { return [pscustomobject]@{ tag_name='latest'; published_at='2020-01-01T00:00:00Z'; html_url='https://gh/roll'; assets=@([pscustomobject]@{name='r.zip'; browser_download_url='https://dl/r.zip'; updated_at=$d}) } }
         'o/pre/releases\?per_page' { return @([pscustomobject]@{ tag_name='nightly-5'; draft=$false; prerelease=$true; published_at=$d; html_url='https://gh/pre'; assets=@() }) }
@@ -67,6 +74,8 @@ Check 'Manual shows check manually'       ((StatusOf 'Manual') -match 'check man
 Check 'Missing exe reported'              ((StatusOf 'Missing') -match 'exe not found')
 Check '404 shows lookup failed'           ((StatusOf 'Broken') -match 'lookup failed')
 Check '403 shows rate limited'            ((StatusOf 'Limited') -match 'rate limited')
+Check 'Wintainium reports its own version, up to date' ((StatusOf 'Self') -match [regex]::Escape($selfVer) -and (StatusOf 'Self') -match 'up to date')
+Check 'Wintainium flags its own newer release'  ((StatusOf 'SelfOld') -match 'UPDATE')
 Check 'cache file written'                (Test-Path (Join-Path $work 'wintainium-cache.json'))
 $n1 = $global:calls.Count
 

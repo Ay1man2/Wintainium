@@ -19,17 +19,19 @@
   .\Wintainium.ps1           # console menu
   .\Wintainium.ps1 gui       # window
   .\Wintainium.ps1 list      # just print the table
+  .\Wintainium.ps1 setup     # window, starting with the setup wizard (folders, token, shortcuts)
   .\Wintainium.ps1 token     # save or replace a GitHub token (encrypted with DPAPI)
   .\Wintainium.ps1 shortcut  # desktop shortcut that opens the window
+  Wintainium.exe             # (release zip) opens the window; same as 'gui'
 
 .NOTES
   https://github.com/  (Wintainium) - GPL-3.0. Not affiliated with Obtainium, EmuDeck or Microsoft.
   GitHub allows 60 anonymous API calls per hour; one refresh uses about one per app.
-  Run '.\Wintainium.ps1 token' once to save a scopeless GitHub token and raise that limit.
+  Save a GitHub token with no scopes (Setup button, or '.\Wintainium.ps1 token') to raise it to 5,000.
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Position = 0)][ValidateSet('menu', 'list', 'token', 'gui', 'shortcut')][string]$Command = 'menu',
+    [Parameter(Position = 0)][ValidateSet('menu', 'list', 'token', 'gui', 'setup', 'shortcut')][string]$Command = 'menu',
     # Defaults to wintainium-apps.json next to this script.
     [string]$Config = '',
     [string]$EmuDeckExe = "$env:LOCALAPPDATA\Programs\EmuDeck\EmuDeck.exe",
@@ -42,7 +44,7 @@ param(
     [int]$CacheMinutes = 60
 )
 
-$script:AppVersion = '0.1.1'
+$script:AppVersion = '0.2.0'
 
 # The script's own folder. Windows PowerShell 5.1 leaves $PSScriptRoot empty while the
 # param() defaults are evaluated when started with -File (as the shortcut does), so resolve it here.
@@ -55,6 +57,12 @@ $ProgressPreference = 'SilentlyContinue'
 
 $ua = @{ 'User-Agent' = "Wintainium/$script:AppVersion" }
 $ghHeaders = @{ 'User-Agent' = 'Wintainium'; 'Accept' = 'application/vnd.github+json' }
+# itch.io serves web pages, not an API, and is quicker to refuse requests that don't look like a browser.
+$itchHeaders = @{
+    'User-Agent'      = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Wintainium/$script:AppVersion (+https://github.com/Ay1man2/Wintainium)"
+    'Accept'          = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    'Accept-Language' = 'en-US,en;q=0.9'
+}
 
 # Earlier versions used emu-*.json / emu-token.xml; copy them over once if found.
 foreach ($pair in @(@('emu-apps.json', 'wintainium-apps.json'), @('emu-cache.json', 'wintainium-cache.json'), @('emu-token.xml', 'wintainium-token.xml'))) {
@@ -62,11 +70,34 @@ foreach ($pair in @(@('emu-apps.json', 'wintainium-apps.json'), @('emu-cache.jso
     if ((Test-Path -LiteralPath $old) -and -not (Test-Path -LiteralPath $new)) { Copy-Item -LiteralPath $old -Destination $new }
 }
 
+# ---- settings saved by the setup wizard ------------------------------------
+# wintainium-settings.json next to this script remembers the folders chosen in Setup,
+# so the .exe and shortcuts need no command-line options.
+$script:settingsFile = Join-Path $script:Here 'wintainium-settings.json'
+$script:settings = [pscustomobject]@{}
+if (Test-Path -LiteralPath $script:settingsFile) {
+    try { $script:settings = Get-Content -LiteralPath $script:settingsFile -Raw | ConvertFrom-Json } catch { $script:settings = [pscustomobject]@{} }
+}
+if (-not $PSBoundParameters.ContainsKey('InstallRoot') -and $script:settings.installRoot) { $InstallRoot = [string]$script:settings.installRoot }
+if (-not $PSBoundParameters.ContainsKey('DownloadDir') -and $script:settings.downloadDir) { $DownloadDir = [string]$script:settings.downloadDir }
+
+function Save-Settings {
+    param([hashtable]$Values)
+    foreach ($k in $Values.Keys) {
+        $script:settings | Add-Member -NotePropertyName $k -NotePropertyValue $Values[$k] -Force
+    }
+    $script:settings | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $script:settingsFile -Encoding UTF8
+}
+
 # ---- GitHub token ---------------------------------------------------------
-# Stored with Export-Clixml, which encrypts it with Windows DPAPI: only this Windows
-# user on this PC can read it back. Set or replace it with:  .\Wintainium.ps1 token
+# Optional. A classic token with NO scopes (no boxes ticked) can't read private data or
+# change anything; it only identifies the caller, which raises GitHub's limit from 60 to
+# 5,000 lookups an hour. Stored with Export-Clixml, which encrypts it with Windows DPAPI:
+# only this Windows user on this PC can read it back.
+# Set or replace it with the Setup button in the window, or:  .\Wintainium.ps1 token
 $script:tokenFile = Join-Path $script:Here 'wintainium-token.xml'
 $script:tokenExpires = $null
+$script:TokenPageUrl = 'https://github.com/settings/tokens/new?description=Wintainium%20(read-only%2C%20no%20scopes)&scopes='
 
 function Get-StoredToken {
     if ($env:GITHUB_TOKEN) { return $env:GITHUB_TOKEN }
@@ -76,14 +107,73 @@ function Get-StoredToken {
         $script:tokenExpires = $t.Expires
         return (New-Object Net.NetworkCredential('', $t.Token)).Password
     } catch {
-        Write-Warning "Could not read $($script:tokenFile). Run '.\Wintainium.ps1 token' to save it again."
+        Write-Warning "Could not read $($script:tokenFile). Run '.\Wintainium.ps1 token' (or Setup in the window) to save it again."
         return $null
     }
+}
+
+function Get-HeaderValue($headers, [string]$name) {
+    if (-not $headers) { return $null }
+    foreach ($k in @($headers.Keys)) {
+        if ([string]$k -ieq $name) { return (@($headers[$k]) -join ',') }
+    }
+    return $null
+}
+
+function ConvertFrom-GitHubExpiry([string]$value) {
+    # GitHub sends e.g. "2027-01-14 13:46:22 -0500" or "2027-01-14 18:46:22 UTC"
+    if ($value -notmatch '^\s*(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})\s*(UTC|Z|[+-]\d{2}:?\d{2})?') { return $null }
+    $zone = $Matches[3]
+    if (-not $zone -or $zone -in 'UTC', 'Z') { $zone = '+00:00' }
+    elseif ($zone -notmatch ':') { $zone = $zone.Substring(0, 3) + ':' + $zone.Substring(3) }
+    $dto = [DateTimeOffset]::Parse("$($Matches[1])T$($Matches[2])$zone", [Globalization.CultureInfo]::InvariantCulture)
+    return $dto.LocalDateTime
+}
+
+# Asks GitHub about a token without saving it. Ok = GitHub accepted it; Safe = it has no scopes.
+function Test-GitHubToken([string]$plain) {
+    $r = [pscustomobject]@{ Ok = $false; Safe = $false; Limit = 0; Scopes = ''; Fine = $false; Expires = $null; Message = '' }
+    $plain = ([string]$plain).Trim()
+    if (-not $plain) { $r.Message = 'No token entered.'; return $r }
+    $r.Fine = $plain.StartsWith('github_pat_')
+    try {
+        $resp = Invoke-WebRequest -Uri 'https://api.github.com/rate_limit' -UseBasicParsing -Headers @{ 'User-Agent' = 'Wintainium'; 'Authorization' = "Bearer $plain" }
+    } catch {
+        $r.Message = 'GitHub did not accept this token. It may be mistyped, expired or deleted.'
+        return $r
+    }
+    $r.Ok = $true
+    try { $r.Limit = [int](($resp.Content | ConvertFrom-Json).rate.limit) } catch {}
+    $scopes = Get-HeaderValue $resp.Headers 'X-OAuth-Scopes'
+    $r.Scopes = if ($scopes) { ($scopes -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) -join ', ' } else { '' }
+    $exp = Get-HeaderValue $resp.Headers 'github-authentication-token-expiration'
+    if ($exp) { try { $r.Expires = ConvertFrom-GitHubExpiry $exp } catch {} }
+    # A fine-grained token's permissions can't be read back from GitHub, so it can't be shown
+    # to be harmless; ask for a classic token with no scopes instead (that one can be checked).
+    $r.Safe = (-not $r.Scopes) -and (-not $r.Fine)
+    if ($r.Fine) {
+        $r.Message = 'This is a fine-grained token (github_pat_...). GitHub doesn''t report what those are allowed to do, so Wintainium can''t confirm it has no permissions. Click Open GitHub to make a classic token with every box unticked instead.'
+    } elseif ($r.Scopes) {
+        $r.Message = "This token has permissions ($($r.Scopes)). Wintainium only needs a token with none. Make a new one with every box unticked."
+    } else {
+        $r.Message = 'Token accepted: no permissions, read-only public access.'
+    }
+    return $r
+}
+
+function Save-GitHubToken([string]$plain, $expires) {
+    $sec = ConvertTo-SecureString $plain.Trim() -AsPlainText -Force
+    [pscustomobject]@{ Token = $sec; Expires = $expires } | Export-Clixml -LiteralPath $script:tokenFile
+    $script:tokenExpires = $expires
+    $ghHeaders['Authorization'] = "Bearer $($plain.Trim())"
 }
 
 function Set-StoredToken {
     # Pasting into a hidden prompt is unreliable in the Windows console, so take the token
     # from the GITHUB_TOKEN variable if it is set, otherwise straight from the clipboard.
+    Write-Host 'A GitHub token raises the lookup limit from 60 to 5,000 an hour.' -ForegroundColor Cyan
+    Write-Host 'Make a classic token with NO boxes ticked (it then can''t read private data or change anything):'
+    Write-Host "  $($script:TokenPageUrl)"
     $plain = ''
     if ($env:GITHUB_TOKEN -and (Read-Host 'Use the token already in GITHUB_TOKEN? (Y/n)') -notmatch '^n') {
         $plain = $env:GITHUB_TOKEN
@@ -94,17 +184,15 @@ function Set-StoredToken {
     }
     $plain = $plain.Trim()
     if (-not $plain) { Write-Host 'No token found. Cancelled.'; return }
-    $sec = ConvertTo-SecureString $plain -AsPlainText -Force
-    try {
-        $rate = (Invoke-RestMethod 'https://api.github.com/rate_limit' -Headers @{ 'User-Agent' = 'Wintainium'; 'Authorization' = "Bearer $plain" }).rate
-    } catch {
-        Write-Host 'GitHub rejected that token, so nothing was saved.' -ForegroundColor Red
-        return
+    $t = Test-GitHubToken $plain
+    if (-not $t.Ok) { Write-Host "$($t.Message) Nothing was saved." -ForegroundColor Red; return }
+    if (-not $t.Safe) {
+        Write-Host $t.Message -ForegroundColor Yellow
+        if ((Read-Host 'Save it anyway? (y/N)') -notmatch '^y') { Write-Host 'Nothing was saved.'; return }
     }
-    $days = Read-Host 'Days until the token expires (Enter = 60)'
-    if ($days -notmatch '^\d+$') { $days = 60 }
-    [pscustomobject]@{ Token = $sec; Expires = (Get-Date).AddDays([int]$days) } | Export-Clixml -LiteralPath $script:tokenFile
-    Write-Host "Saved to $($script:tokenFile). GitHub limit is now $($rate.limit) lookups per hour." -ForegroundColor Green
+    Save-GitHubToken $plain $t.Expires
+    $until = if ($t.Expires) { "expires $($t.Expires.ToString('yyyy-MM-dd'))" } else { 'no expiry date' }
+    Write-Host "Saved to $($script:tokenFile) ($until). GitHub limit is now $($t.Limit) lookups per hour." -ForegroundColor Green
 }
 
 $storedToken = Get-StoredToken
@@ -170,7 +258,7 @@ function Get-LatestRelease($app) {
         return [pscustomobject]@{ Tag = $g.tag_name; Date = (ConvertTo-Utc $g.released_at); Page = $g._links.self; Assets = $assets; Notes = [string]$g.description }
     } elseif ($app.source -eq 'itch') {
         # itch.io has no public release API, so read the game page's download list
-        $html = (Invoke-WebRequest -Uri ([string]$app.url) -UseBasicParsing -Headers $ua).Content
+        $html = (Invoke-WebRequest -Uri ([string]$app.url) -UseBasicParsing -Headers $itchHeaders -TimeoutSec 20).Content
         return (Read-ItchPage $html ([string]$app.url) ([string]$app.asset))
     } elseif ($app.source -eq 'dolphin') {
         $d = Invoke-RestMethod $app.api -Headers $ua
@@ -195,16 +283,56 @@ if (Test-Path -LiteralPath $script:cacheFile) {
     } catch { $script:cache = @{} }
 }
 
+function Get-SourceSite($app) {
+    switch ([string]$app.source) {
+        'github'  { return 'GitHub' }
+        'itch'    { return 'itch.io' }
+        'gitlab'  { return 'GitLab' }
+        'dolphin' { return 'dolphin-emu.org' }
+    }
+    foreach ($u in @([string]$app.api, [string]$app.url)) {
+        if ($u -match '^https?://([^/]+)') { return $Matches[1] }
+    }
+    return 'the release site'
+}
+
+# Turns a failed lookup into a status. Only GitHub lookups use the token, so only they
+# can be 'token rejected' or 'rate limited'; other sites that refuse or time out are 'site busy'.
+function Get-LookupStatus($err, $app) {
+    $why = "$($err.Exception.Message) $($err.ErrorDetails.Message)"
+    $code = 0
+    try { if ($err.Exception.Response) { $code = [int]$err.Exception.Response.StatusCode } } catch { $code = 0 }
+    if (-not $code -and $why -match '\b([45]\d\d)\b') { $code = [int]$Matches[1] }
+    if ([string]$app.source -eq 'github') {
+        if ($code -eq 401 -or $why -match 'Bad credentials') { return 'token rejected' }
+        if ($code -in 403, 429 -or $why -match 'rate limit') { return 'rate limited' }
+        return 'lookup failed'
+    }
+    if ($code -in 403, 429, 502, 503, 504 -or $why -match 'timed out|Unable to connect|could not be resolved|connection was closed') { return 'site busy' }
+    return 'lookup failed'
+}
+
 function Get-LatestCached($app, [switch]$Force) {
     $key = [string]$app.name
     $c = $script:cache[$key]
     if (-not $Force -and $c -and $c.Fetched) {
         $age = ((Get-Date).ToUniversalTime() - (ConvertTo-Utc $c.Fetched)).TotalMinutes
         if ($age -lt $CacheMinutes) {
-            return [pscustomobject]@{ Tag = $c.Tag; Date = (ConvertTo-Utc $c.Date); Page = $c.Page; Assets = @($c.Assets); Notes = [string]$c.Notes }
+            return [pscustomobject]@{ Tag = $c.Tag; Date = (ConvertTo-Utc $c.Date); Page = $c.Page; Assets = @($c.Assets); Notes = [string]$c.Notes; Stale = $null }
         }
     }
-    $l = Get-LatestRelease $app
+    try {
+        $l = Get-LatestRelease $app
+    } catch {
+        # A site that is briefly down or throttling should not turn a known app red:
+        # fall back to the last answer it gave, and say so.
+        if ($c -and $c.Tag) {
+            $reason = Get-LookupStatus $_ $app
+            return [pscustomobject]@{ Tag = $c.Tag; Date = (ConvertTo-Utc $c.Date); Page = $c.Page; Assets = @($c.Assets); Notes = [string]$c.Notes
+                Stale = [pscustomobject]@{ Reason = $reason; Site = (Get-SourceSite $app); Fetched = (ConvertTo-Utc $c.Fetched) } }
+        }
+        throw
+    }
     if ($l) {
         $script:cache[$key] = [pscustomobject]@{
             Tag     = $l.Tag
@@ -214,12 +342,33 @@ function Get-LatestCached($app, [switch]$Force) {
             Notes   = if ($l.Notes -and $l.Notes.Length -gt 20000) { $l.Notes.Substring(0, 20000) } else { [string]$l.Notes }
             Fetched = (Get-Date).ToUniversalTime().ToString('o')
         }
+        $l | Add-Member -NotePropertyName Stale -NotePropertyValue $null -Force
     }
     return $l
 }
 
 function Save-Cache {
     try { $script:cache | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:cacheFile -Encoding UTF8 } catch { }
+}
+
+# Wintainium's own entry (it can track its own releases); shown in gold unless turned off
+function Test-SelfEntry($app) {
+    return ([string]$app.repo -ieq 'Ay1man2/Wintainium')
+}
+
+# $true if the installed version is older than the release, $false if not, $null when the two
+# can't be compared: not plain version numbers, or a different numbering scheme (a program
+# that reports 1.0.0.0 for every build, say), where the release date decides instead.
+# Same scheme means the same major version, and for x.y.z versions the same minor as well.
+function Test-OlderVersion([string]$installed, [string]$release) {
+    $a = [regex]::Match([string]$installed, '^\d+(\.\d+){1,3}').Value
+    $b = [regex]::Match([string]$release, '^\d+(\.\d+){1,3}').Value
+    if (-not $a -or -not $b) { return $null }
+    try { $va = [version]$a; $vb = [version]$b } catch { return $null }
+    if ($va.Major -ne $vb.Major) { return $null }
+    if ($va.Build -ge 0 -and $vb.Build -ge 0 -and $va.Minor -ne $vb.Minor) { return $null }
+    $pad = { param($v) [version]::new($v.Major, $v.Minor, [math]::Max($v.Build, 0), [math]::Max($v.Revision, 0)) }
+    return ((& $pad $va) -lt (& $pad $vb))
 }
 
 function Get-AppRows([switch]$Force) {
@@ -233,6 +382,8 @@ function Get-AppRows([switch]$Force) {
             $item = Get-Item -LiteralPath $exe
             $exeUtc = $item.LastWriteTimeUtc
             $installedVer = [string]$item.VersionInfo.ProductVersion
+            # Wintainium's own entry: this script knows its version, even run from a git clone
+            if ($script:Here -and ($exe -ieq (Join-Path $script:Here 'Wintainium.exe') -or $exe -ieq (Join-Path $script:Here 'Wintainium.ps1'))) { $installedVer = $script:AppVersion }
         }
 
         $latest = $null
@@ -245,10 +396,7 @@ function Get-AppRows([switch]$Force) {
                 $latest = Get-LatestCached $app -Force:$Force
                 $page = $latest.Page
             } catch {
-                $status = 'lookup failed'
-                $why = "$($_.Exception.Message) $($_.ErrorDetails.Message)"
-                if ($why -match '401|Bad credentials') { $status = 'token rejected' }
-                elseif ($why -match '403|429|rate limit') { $status = 'rate limited' }
+                $status = Get-LookupStatus $_ $app
             }
         }
 
@@ -261,8 +409,12 @@ function Get-AppRows([switch]$Force) {
         } elseif ($latest) {
             $grace = if ($app.graceDays) { [int]$app.graceDays } else { $GraceDays }
             $num = ([string]$latest.Tag) -replace '^[^\d]*', ''
+            $older = Test-OlderVersion $installedVer $num
             if ($installedVer -and $num -and $installedVer.Contains($num)) {
                 $status = 'up to date'
+            } elseif ($null -ne $older) {
+                # same numbering scheme on both sides (2.9.179 vs 2.9.181): the numbers decide
+                $status = if ($older) { 'UPDATE' } else { 'up to date' }
             } elseif ($latest.Date -and $latest.Date -gt $exeUtc.AddDays($grace)) {
                 $status = 'UPDATE'
             } else {
@@ -276,7 +428,8 @@ function Get-AppRows([switch]$Force) {
             App       = [string]$app.name
             Status    = $status
             Installed = if ($installedVer) { $installedVer } elseif ($app.installedTag) { [string]$app.installedTag } elseif ($exeUtc) { $exeUtc.ToLocalTime().ToString('yyyy-MM-dd') } else { '' }
-            Latest    = if ($latest) { [string]$latest.Tag } else { '' }
+            Latest    = if ($latest) { [string]$latest.Tag + $(if ($latest.Stale) { ' (cached)' } else { '' }) } else { '' }
+            Stale     = if ($latest) { $latest.Stale } else { $null }
             Released  = if ($latest -and $latest.Date) { $latest.Date.ToLocalTime().ToString('yyyy-MM-dd') } else { '' }
             Methods   = $methods
             Via       = $viaLabel[[string]$methods[0]]
@@ -285,11 +438,13 @@ function Get-AppRows([switch]$Force) {
             Assets    = if ($latest) { $latest.Assets } else { @() }
             Notes     = if ($latest) { [string]$latest.Notes } else { '' }
             Def       = $app
+            Self      = Test-SelfEntry $app
+            Gold      = (Test-SelfEntry $app) -and ($script:settings.goldSelf -ne $false)
         }
     }
     Write-Host ("`r" + (' ' * 60) + "`r") -NoNewline
     Save-Cache
-    $order = @{ 'UPDATE' = 0; 'token rejected' = 1; 'rate limited' = 1; 'lookup failed' = 1; 'exe not found' = 2; 'check manually' = 3; 'up to date' = 4 }
+    $order = @{ 'UPDATE' = 0; 'token rejected' = 1; 'rate limited' = 1; 'site busy' = 1; 'lookup failed' = 1; 'exe not found' = 2; 'check manually' = 3; 'up to date' = 4 }
     return @($rows | Sort-Object { $order[$_.Status] }, App)
 }
 
@@ -309,15 +464,29 @@ function Show-Table($rows) {
     $n = @($rows | Where-Object { $_.Status -eq 'UPDATE' }).Count
     Write-Host ''
     Write-Host "$n update(s) available." -ForegroundColor Cyan
-    if (@($rows | Where-Object { $_.Status -eq 'rate limited' }).Count -gt 0) {
-        Write-Host 'Some lookups hit GitHub''s hourly limit (60 without a token). They will work again within the hour,' -ForegroundColor Yellow
-        Write-Host 'or save a GitHub token with:  .\Wintainium.ps1 token' -ForegroundColor Yellow
-    }
-    if (@($rows | Where-Object { $_.Status -eq 'token rejected' }).Count -gt 0) {
-        Write-Host 'GitHub rejected the saved token (expired or revoked). Make a new one and run:  .\Wintainium.ps1 token' -ForegroundColor Yellow
+    Show-LookupNotes $rows
+}
+
+# Explains failed or fallback lookups under the table (console) or in the log pane (window).
+function Show-LookupNotes($rows) {
+    $tokenHint = if ($script:InGui) { 'Click Setup to save a new one.' } else { 'Run  .\Wintainium.ps1 token  to save a new one.' }
+    $limitHint = if ($script:InGui) { 'Click Setup to add a free GitHub token (5,000 lookups an hour).' } else { 'Run  .\Wintainium.ps1 token  to add a free GitHub token (5,000 lookups an hour).' }
+    $reasons = @($rows | ForEach-Object { if ($_.Stale) { $_.Stale.Reason } else { $_.Status } })
+    if ($reasons -contains 'token rejected') {
+        Write-Host "GitHub rejected the saved token (expired or deleted). $tokenHint" -ForegroundColor Yellow
+    } elseif ($reasons -contains 'rate limited') {
+        Write-Host "GitHub's hourly lookup limit was reached (60 without a token). It resets within the hour. $limitHint" -ForegroundColor Yellow
     } elseif ($script:tokenExpires) {
         $left = [int]([datetime]$script:tokenExpires - (Get-Date)).TotalDays
-        if ($left -le 7) { Write-Host "The saved GitHub token expires in about $left day(s). Make a new one and run:  .\Wintainium.ps1 token" -ForegroundColor Yellow }
+        if ($left -le 7) { Write-Host "Your GitHub token expires in about $left day(s). $tokenHint" -ForegroundColor Yellow }
+    }
+    foreach ($r in @($rows | Where-Object { $_.Status -eq 'site busy' })) {
+        Write-Host "$($r.App): $(Get-SourceSite $r.Def) didn't answer. It's usually busy for a few minutes; try Refresh later." -ForegroundColor Yellow
+    }
+    foreach ($r in @($rows | Where-Object { $_.Stale })) {
+        $when = $r.Stale.Fetched.ToLocalTime().ToString('yyyy-MM-dd HH:mm')
+        $what = switch ($r.Stale.Reason) { 'token rejected' { 'rejected the GitHub token' } 'rate limited' { 'hit its hourly limit' } 'site busy' { "didn't answer" } default { 'gave an error' } }
+        Write-Host "$($r.App): $($r.Stale.Site) $what, so this shows what it reported at $when." -ForegroundColor DarkGray
     }
 }
 
@@ -851,18 +1020,45 @@ if ($Command -eq 'token') { Set-StoredToken; return }
 # ===========================================================================
 #  Desktop shortcut
 # ===========================================================================
+# Icon for shortcuts and the taskbar. Pointing Windows at assets\icon.ico lets Explorer hold
+# that file open, which blocks replacing the folder during an update, so use the .exe's own
+# icon, or a copy kept in %LOCALAPPDATA%\Wintainium.
+function Get-ShellIcon {
+    $exe = Join-Path $script:Here 'Wintainium.exe'
+    if (Test-Path -LiteralPath $exe) { return "$exe,0" }
+    $src = Join-Path $script:Here 'assets\icon.ico'
+    if (-not (Test-Path -LiteralPath $src)) { return '' }
+    $dir = Join-Path $env:LOCALAPPDATA 'Wintainium'
+    $copy = Join-Path $dir 'icon.ico'
+    try {
+        if (-not (Test-Path -LiteralPath $dir)) { [void](New-Item -ItemType Directory -Path $dir) }
+        if (-not (Test-Path -LiteralPath $copy) -or (Get-Item -LiteralPath $copy).Length -ne (Get-Item -LiteralPath $src).Length) {
+            Copy-Item -LiteralPath $src -Destination $copy -Force
+        }
+        return "$copy,0"
+    } catch {
+        if (Test-Path -LiteralPath $copy) { return "$copy,0" }
+        return "$src,0"
+    }
+}
+
 if ($Command -eq 'shortcut') {
     $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Wintainium.lnk'
     $sh = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
-    $sh.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
     $extra = ''
     if ($PSBoundParameters.ContainsKey('InstallRoot')) { $extra += " -InstallRoot `"$InstallRoot`"" }
     if ($PSBoundParameters.ContainsKey('Config')) { $extra += " -Config `"$Config`"" }
-    $sh.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`" gui$extra"
+    $exeLauncher = Join-Path $script:Here 'Wintainium.exe'
+    if ((Test-Path -LiteralPath $exeLauncher) -and -not $extra) {
+        $sh.TargetPath = $exeLauncher
+        $sh.Arguments = ''
+    } else {
+        $sh.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+        $sh.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`" gui$extra"
+    }
     $sh.WorkingDirectory = $script:Here
-    $ico = Join-Path $script:Here 'assets\icon.ico'
-    if (Test-Path -LiteralPath $ico) { $sh.IconLocation = "$ico,0" }
-    else { $sh.IconLocation = "$env:SystemRoot\System32\shell32.dll,12" }
+    $ico = Get-ShellIcon
+    $sh.IconLocation = if ($ico) { $ico } else { "$env:SystemRoot\System32\shell32.dll,12" }
     $sh.Save()
     Write-Host "Created $lnk" -ForegroundColor Green
     return
@@ -872,16 +1068,125 @@ if ($Command -eq 'shortcut') {
 #  Window (WPF). Reuses every function above: Write-Host and Read-Host are
 #  redirected into the window's log and into dialog boxes.
 # ===========================================================================
-if ($Command -eq 'gui') {
+if ($Command -in 'gui', 'setup') {
+    $script:InGui = $true
     if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
         # PowerShell 7 runs MTA; WPF needs Windows PowerShell's STA thread, so restart there (hidden)
         $extra = ''
         if ($PSBoundParameters.ContainsKey('InstallRoot')) { $extra += " -InstallRoot `"$InstallRoot`"" }
         if ($PSBoundParameters.ContainsKey('Config')) { $extra += " -Config `"$Config`"" }
-        Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-STA -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" gui$extra"
+        Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-STA -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" $Command$extra"
         return
     }
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+
+    # ---- taskbar identity -------------------------------------------------------
+    # The window belongs to powershell.exe, so Windows would group it with PowerShell on the
+    # taskbar. An explicit AppUserModelID gives Wintainium its own taskbar button; the same ID
+    # on our shortcuts makes a pinned Wintainium icon and the running window share one button,
+    # and the relaunch command makes "Pin to taskbar" on the running window pin Wintainium.
+    $script:AppId = 'Ay1man2.Wintainium'
+    try {
+        Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+
+public static class WintainiumShell
+{
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    struct PropertyKey { public Guid fmtid; public uint pid; public PropertyKey(Guid f, uint p) { fmtid = f; pid = p; } }
+
+    [StructLayout(LayoutKind.Explicit)]
+    struct PropVariant { [FieldOffset(0)] public ushort vt; [FieldOffset(8)] public IntPtr p; }
+
+    [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IPropertyStore
+    {
+        void GetCount(out uint count);
+        void GetAt(uint index, out PropertyKey key);
+        void GetValue(ref PropertyKey key, out PropVariant value);
+        void SetValue(ref PropertyKey key, ref PropVariant value);
+        void Commit();
+    }
+
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    class CShellLink { }
+
+    [DllImport("shell32.dll")]
+    static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string appId);
+
+    [DllImport("shell32.dll")]
+    static extern int SHGetPropertyStoreForWindow(IntPtr hwnd, ref Guid riid, out IPropertyStore store);
+
+    [DllImport("ole32.dll")]
+    static extern int PropVariantClear(ref PropVariant pv);
+
+    static readonly Guid AppUserModel = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3");
+
+    static void SetString(IPropertyStore store, uint pid, string value)
+    {
+        PropertyKey key = new PropertyKey(AppUserModel, pid);
+        PropVariant pv = new PropVariant();
+        pv.vt = 31; // VT_LPWSTR
+        pv.p = Marshal.StringToCoTaskMemUni(value);
+        try { store.SetValue(ref key, ref pv); } finally { PropVariantClear(ref pv); }
+    }
+
+    public static void SetProcessAppId(string appId) { SetCurrentProcessExplicitAppUserModelID(appId); }
+
+    public static void SetWindowAppId(IntPtr hwnd, string appId, string relaunchCommand, string displayName, string icon)
+    {
+        Guid iid = typeof(IPropertyStore).GUID;
+        IPropertyStore store;
+        if (SHGetPropertyStoreForWindow(hwnd, ref iid, out store) != 0 || store == null) return;
+        try
+        {
+            SetString(store, 5, appId);
+            if (!string.IsNullOrEmpty(relaunchCommand))
+            {
+                SetString(store, 2, relaunchCommand);
+                SetString(store, 4, displayName);
+                if (!string.IsNullOrEmpty(icon)) SetString(store, 3, icon);
+            }
+        }
+        finally { Marshal.ReleaseComObject(store); }
+    }
+
+    public static void SetShortcutAppId(string lnkPath, string appId)
+    {
+        object link = new CShellLink();
+        try
+        {
+            IPersistFile file = (IPersistFile)link;
+            file.Load(lnkPath, 2); // STGM_READWRITE
+            IPropertyStore store = (IPropertyStore)link;
+            SetString(store, 5, appId);
+            store.Commit();
+            file.Save(lnkPath, true);
+        }
+        finally { Marshal.ReleaseComObject(link); }
+    }
+}
+'@
+        [WintainiumShell]::SetProcessAppId($script:AppId)
+        $script:HasShellIds = $true
+    } catch {
+        $script:HasShellIds = $false
+        Write-Verbose "taskbar identity not set: $($_.Exception.Message)"
+    }
+
+    function Get-RelaunchCommand {
+        $exe = Join-Path $script:Here 'Wintainium.exe'
+        if (Test-Path -LiteralPath $exe) { return "`"$exe`"" }
+        return "`"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $script:Here 'Wintainium.ps1')`" gui"
+    }
+
+    function Set-ShortcutAppId([string]$lnk) {
+        if (-not $script:HasShellIds) { return }
+        try { [WintainiumShell]::SetShortcutAppId($lnk, $script:AppId) } catch { Write-Verbose "shortcut id not set: $($_.Exception.Message)" }
+    }
+
 
     $styles = @'
     <Style TargetType="Button" x:Key="Btn">
@@ -965,6 +1270,12 @@ STYLES
       <Button x:Name="BtnForce" Style="{StaticResource Btn}" ToolTip="Ignore the 60-minute cache and ask every release source again">
         <TextBlock Text="Re-check all"/>
       </Button>
+      <Button x:Name="BtnScan" Style="{StaticResource Btn}" ToolTip="Find apps already installed on this PC and add them">
+        <StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE721;" Margin="0,1,8,0"/><TextBlock Text="Scan"/></StackPanel>
+      </Button>
+      <Button x:Name="BtnSetup" Style="{StaticResource Btn}" ToolTip="Folders, GitHub token and shortcuts">
+        <StackPanel Orientation="Horizontal"><TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE713;" Margin="0,1,8,0"/><TextBlock Text="Setup"/></StackPanel>
+      </Button>
     </WrapPanel>
 
     <DockPanel Grid.Row="2" Margin="20,0,20,8" LastChildFill="False">
@@ -1018,7 +1329,24 @@ STYLES
         </Style>
       </DataGrid.CellStyle>
       <DataGrid.Columns>
-        <DataGridTextColumn Header="App" Binding="{Binding App}" Width="2*"/>
+        <DataGridTextColumn Header="App" Binding="{Binding App}" Width="2*">
+          <DataGridTextColumn.ElementStyle>
+            <Style TargetType="TextBlock">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding Gold}" Value="True">
+                  <Setter Property="Foreground" Value="#F5C542"/>
+                  <Setter Property="FontWeight" Value="SemiBold"/>
+                  <Setter Property="ToolTip" Value="Wintainium keeping itself up to date (right-click to turn off the gold)"/>
+                  <Setter Property="Effect">
+                    <Setter.Value>
+                      <DropShadowEffect Color="#F5C542" BlurRadius="8" ShadowDepth="0" Opacity="0.55"/>
+                    </Setter.Value>
+                  </Setter>
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </DataGridTextColumn.ElementStyle>
+        </DataGridTextColumn>
         <DataGridTemplateColumn Header="Status" Width="140" SortMemberPath="Status">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
@@ -1042,6 +1370,10 @@ STYLES
                 <DataTrigger Binding="{Binding Status}" Value="rate limited">
                   <Setter TargetName="pill" Property="Background" Value="#3B2530"/>
                   <Setter TargetName="pt" Property="Foreground" Value="#F38BA8"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="site busy">
+                  <Setter TargetName="pill" Property="Background" Value="#3A3326"/>
+                  <Setter TargetName="pt" Property="Foreground" Value="#FAB387"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Status}" Value="token rejected">
                   <Setter TargetName="pill" Property="Background" Value="#3B2530"/>
@@ -1143,14 +1475,555 @@ STYLES
         return [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $x))
     }
 
+    # ---- setup wizard: folders, optional GitHub token, shortcuts ---------------
+    $wizardXaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Wintainium setup" Width="660" Height="600" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="#1E1E2E" Foreground="#CDD6F4"
+        FontFamily="Segoe UI" FontSize="13" ShowInTaskbar="False">
+  <Window.Resources>
+STYLES
+    <Style TargetType="TextBlock" x:Key="Body">
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Foreground" Value="#BAC2DE"/>
+      <Setter Property="Margin" Value="0,0,0,10"/>
+      <Setter Property="LineHeight" Value="19"/>
+    </Style>
+    <Style TargetType="TextBlock" x:Key="H">
+      <Setter Property="FontSize" Value="20"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,0,0,12"/>
+    </Style>
+    <Style TargetType="TextBox" x:Key="Field">
+      <Setter Property="Background" Value="#313244"/>
+      <Setter Property="Foreground" Value="#CDD6F4"/>
+      <Setter Property="BorderBrush" Value="#45475A"/>
+      <Setter Property="CaretBrush" Value="#CDD6F4"/>
+      <Setter Property="Padding" Value="6,5"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+  </Window.Resources>
+  <Grid Margin="26,20,26,16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+    <TextBlock x:Name="StepLabel" Grid.Row="0" Foreground="#6C7086" Margin="0,0,0,8"/>
+
+    <Grid Grid.Row="1">
+      <!-- 1: welcome -->
+      <StackPanel x:Name="P1">
+        <TextBlock Style="{StaticResource H}" Text="Welcome to Wintainium"/>
+        <TextBlock Style="{StaticResource Body}" Text="Wintainium keeps the apps you install by hand (emulators, PC ports, mods and tools) up to date, straight from their release pages on GitHub, GitLab, Codeberg and itch.io."/>
+        <TextBlock Style="{StaticResource Body}" Text="This takes about a minute. You can change everything later with the Setup button."/>
+        <Border Background="#2A2A3C" CornerRadius="8" Padding="14,10" Margin="0,6,0,0">
+          <StackPanel>
+            <TextBlock Text="Before you use it" FontWeight="SemiBold" Foreground="#F9E2AF" Margin="0,0,0,6"/>
+            <TextBlock Style="{StaticResource Body}" Margin="0" Text="Wintainium is an unsigned PowerShell script that downloads and runs programs. Everything it does is in Wintainium.ps1 if you want to read it. Only add apps you trust; it checks published checksums when a project provides them and never turns off Windows Security."/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- 2: folders -->
+      <StackPanel x:Name="P2" Visibility="Collapsed">
+        <TextBlock Style="{StaticResource H}" Text="Folders"/>
+        <TextBlock Style="{StaticResource Body}" Text="Where should Wintainium put apps you add from a link? Apps you already have stay where they are."/>
+        <DockPanel Margin="0,0,0,18">
+          <Button x:Name="BrowseInstall" DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="Browse..." Margin="8,0,0,0"/>
+          <TextBox x:Name="InstallBox" Style="{StaticResource Field}"/>
+        </DockPanel>
+        <TextBlock Style="{StaticResource Body}" Text="Where should downloads (installers, zips) be saved?"/>
+        <DockPanel>
+          <Button x:Name="BrowseDownload" DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="Browse..." Margin="8,0,0,0"/>
+          <TextBox x:Name="DownloadBox" Style="{StaticResource Field}"/>
+        </DockPanel>
+      </StackPanel>
+
+      <!-- 3: token -->
+      <ScrollViewer x:Name="P3" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+          <TextBlock Style="{StaticResource H}" Text="GitHub token (optional, recommended)"/>
+          <TextBlock Style="{StaticResource Body}" Text="Most apps are checked on GitHub, which allows only 60 checks an hour without a token. A list of 30 apps can use that up in two refreshes. A free token raises it to 5,000."/>
+          <Border Background="#26352B" CornerRadius="8" Padding="14,10" Margin="0,0,0,12">
+            <TextBlock Style="{StaticResource Body}" Margin="0" Foreground="#A6E3A1" Text="The token has no permissions at all: it can't see your private repositories or change anything on your account. It only tells GitHub who is asking, so you get the higher limit. It is stored encrypted for your Windows account only and never leaves this PC except to talk to GitHub."/>
+          </Border>
+          <TextBlock Style="{StaticResource Body}" Text="1.  Click Open GitHub and sign in if asked. The page opens with every box unticked: leave them all unticked."/>
+          <TextBlock Style="{StaticResource Body}" Text="2.  Pick an expiration (1 year is fine; Wintainium reminds you a week before) and click Generate token at the bottom."/>
+          <TextBlock Style="{StaticResource Body}" Text="3.  Copy the token (it starts with ghp_), paste it below and click Check and save. Don't reuse a token you made for something else, such as pushing code."/>
+          <Button x:Name="OpenGitHub" Style="{StaticResource Btn}" Content="Open GitHub" HorizontalAlignment="Left" Margin="0,2,0,12"/>
+          <DockPanel>
+            <Button x:Name="CheckToken" DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Check and save" Margin="8,0,0,0"/>
+            <PasswordBox x:Name="TokenBox" Background="#313244" Foreground="#CDD6F4" BorderBrush="#45475A" Padding="6,5" CaretBrush="#CDD6F4" VerticalContentAlignment="Center"/>
+          </DockPanel>
+          <TextBlock x:Name="TokenResult" Style="{StaticResource Body}" Margin="0,10,0,0"/>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- 4: find existing apps -->
+      <StackPanel x:Name="P4" Visibility="Collapsed">
+        <TextBlock Style="{StaticResource H}" Text="Find apps you already have"/>
+        <TextBlock Style="{StaticResource Body}" Text="Already have emulators or tools installed? Wintainium can look for the ones it recognizes, and for programs you downloaded from GitHub, GitLab, Codeberg or itch.io, so you don't have to add them one by one."/>
+        <TextBlock Style="{StaticResource Body}" Text="It only reads your files and shows you a list to choose from. Nothing is added until you say so."/>
+        <Button x:Name="ScanNow" Style="{StaticResource Primary}" Content="Scan this PC" HorizontalAlignment="Left" Margin="0,6,0,12"/>
+        <TextBlock x:Name="ScanResult" Style="{StaticResource Body}" Text="You can also skip this and scan later with the Scan button."/>
+      </StackPanel>
+
+      <!-- 5: shortcuts -->
+      <StackPanel x:Name="P5" Visibility="Collapsed">
+        <TextBlock Style="{StaticResource H}" Text="Shortcuts"/>
+        <CheckBox x:Name="SCDesktop" Content="Desktop shortcut" Foreground="#CDD6F4" IsChecked="True" Margin="0,0,0,8"/>
+        <CheckBox x:Name="SCStart" Content="Start menu shortcut" Foreground="#CDD6F4" IsChecked="True" Margin="0,0,0,8"/>
+        <TextBlock Style="{StaticResource Body}" Text="To pin Wintainium to the taskbar, right-click its taskbar button while it's open (or its Start menu entry) and choose Pin to taskbar." Margin="0,0,0,10"/>
+        <TextBlock Style="{StaticResource H}" Text="You're set" Margin="0,8,0,8"/>
+        <TextBlock Style="{StaticResource Body}" Text="Add more apps any time with Add app (paste a GitHub, GitLab, Codeberg or itch.io link) or Scan. Double-click a row to update it, right-click for more."/>
+      </StackPanel>
+    </Grid>
+
+    <DockPanel Grid.Row="2" Margin="0,14,0,0" LastChildFill="False">
+      <Button x:Name="WCancel" DockPanel.Dock="Left" Style="{StaticResource Btn}" Content="Cancel" IsCancel="True"/>
+      <Button x:Name="WNext" DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Next" Margin="0,0,0,8"/>
+      <Button x:Name="WBack" DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="Back"/>
+    </DockPanel>
+  </Grid>
+</Window>
+'@
+
+    # ---- Scan: find apps already on this PC -----------------------------------
+    $scanXaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Find apps you already have" Width="820" Height="660" MinWidth="640" MinHeight="420"
+        WindowStartupLocation="CenterOwner" Background="#1E1E2E" Foreground="#CDD6F4"
+        FontFamily="Segoe UI" FontSize="13" ShowInTaskbar="False">
+  <Window.Resources>
+STYLES
+  </Window.Resources>
+  <Grid Margin="22,18,22,14">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+    <TextBlock Grid.Row="0" Text="Find apps you already have" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,8"/>
+    <TextBlock Grid.Row="1" TextWrapping="Wrap" Foreground="#BAC2DE" LineHeight="19"
+               Text="Wintainium looks for emulators and tools it recognizes, and for programs whose files came from GitHub, GitLab, Codeberg or itch.io. It only reads your files; nothing is changed. Untick anything you don't want, rename entries if you like, then click Add selected."/>
+    <TextBlock x:Name="SStatus" Grid.Row="2" Foreground="#F9E2AF" Margin="0,12,0,8" TextWrapping="Wrap"/>
+    <Border Grid.Row="3" Background="#181825" CornerRadius="8">
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel x:Name="SList" Margin="8"/>
+      </ScrollViewer>
+    </Border>
+    <TextBlock x:Name="SExtra" Grid.Row="4" Foreground="#A6ADC8" TextWrapping="Wrap" Margin="0,10,0,0"/>
+    <DockPanel Grid.Row="5" Margin="0,12,0,0" LastChildFill="False">
+      <Button x:Name="SFolder" DockPanel.Dock="Left" Style="{StaticResource Btn}" Content="Scan another folder..."
+              ToolTip="Also look in a folder of your own, such as D:\Games"/>
+      <Button x:Name="SHidden" DockPanel.Dock="Left" Style="{StaticResource Btn}" Content="Show hidden" Margin="8,0,0,0" Visibility="Collapsed"
+              ToolTip="Bring back the items you hid with Don't show again"/>
+      <Button x:Name="SAdd" DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Add selected" Margin="0,0,0,8"/>
+      <Button x:Name="SClose" DockPanel.Dock="Right" Style="{StaticResource Btn}" Content="Close" IsCancel="True"/>
+    </DockPanel>
+  </Grid>
+</Window>
+'@
+
+    $script:scanExtra = New-Object System.Collections.Generic.List[string]
+
+    function Update-ScanCount {
+        $n = @($script:scanRows | Where-Object { $_.Check.IsChecked }).Count
+        $script:sc.SAdd.Content = if ($n) { "Add selected ($n)" } else { 'Add selected' }
+        $script:sc.SAdd.IsEnabled = ($n -gt 0) -and -not $script:scanJob
+    }
+
+    function Add-ScanRow($cand) {
+        $border = New-Object System.Windows.Controls.Border
+        $border.Background = '#1E1E2E'; $border.CornerRadius = '6'; $border.Padding = '10,8'; $border.Margin = '0,0,0,6'
+        $grid = New-Object System.Windows.Controls.Grid
+        foreach ($w in 'Auto', '*', 'Auto') {
+            $cd = New-Object System.Windows.Controls.ColumnDefinition
+            $cd.Width = if ($w -eq '*') { New-Object System.Windows.GridLength(1, ([System.Windows.GridUnitType]::Star)) } else { [System.Windows.GridLength]::Auto }
+            $grid.ColumnDefinitions.Add($cd)
+        }
+        $check = New-Object System.Windows.Controls.CheckBox
+        $check.VerticalAlignment = 'Top'; $check.Margin = '0,6,12,0'
+        $check.IsChecked = [bool]$cand.Selected
+        # ticking an entry whose program wasn't found opens the Locate picker
+        $check.Add_Checked({
+            param($s, $e)
+            $r = $s.Tag
+            if ($r -and -not $r.Cand.Exe) {
+                if (-not (Invoke-ScanLocate $r)) { $s.IsChecked = $false }
+            }
+            Update-ScanCount
+        })
+        $check.Add_Unchecked({ Update-ScanCount })
+        [System.Windows.Controls.Grid]::SetColumn($check, 0)
+
+        $stack = New-Object System.Windows.Controls.StackPanel
+        [System.Windows.Controls.Grid]::SetColumn($stack, 1)
+        $nameBox = New-Object System.Windows.Controls.TextBox
+        $nameBox.Text = [string]$cand.Name
+        $nameBox.Background = '#313244'; $nameBox.Foreground = '#CDD6F4'; $nameBox.BorderBrush = '#45475A'; $nameBox.CaretBrush = '#CDD6F4'
+        $nameBox.Padding = '5,3'; $nameBox.FontWeight = 'SemiBold'; $nameBox.MaxWidth = 360; $nameBox.HorizontalAlignment = 'Left'; $nameBox.MinWidth = 220
+        $nameBox.ToolTip = 'Name shown in your list'
+        [void]$stack.Children.Add($nameBox)
+        $mk = {
+            param([string]$text, [string]$color, [double]$size)
+            $t = New-Object System.Windows.Controls.TextBlock
+            $t.Text = $text; $t.Foreground = $color; $t.FontSize = $size; $t.TextWrapping = 'Wrap'; $t.Margin = '0,3,0,0'
+            [void]$stack.Children.Add($t)
+            return $t
+        }
+        [void](& $mk ([string]$cand.From) '#A6ADC8' 12)
+        if ($cand.Exe) {
+            $pathText = & $mk ([string]$cand.Exe) '#6C7086' 11
+            if ($cand.Note) { [void](& $mk ([string]$cand.Note) '#6C7086' 11) }
+        } else {
+            # needs one more step: an amber edge and an amber line that says what to do
+            $border.BorderBrush = '#F9E2AF'; $border.BorderThickness = '3,0,0,0'
+            $pathText = & $mk 'Installed program not found yet: click Locate .exe... to choose it, then it can be added.' '#F9E2AF' 11
+            if ($cand.Note) { [void](& $mk (([string]$cand.Note) -replace '; click Locate to pick the installed \.exe$', '') '#6C7086' 11) }
+            $check.ToolTip = 'Pick the installed program first (this opens Locate .exe...)'
+        }
+
+        $row = @{ Cand = $cand; Check = $check; Name = $nameBox; Path = $pathText; Border = $border }
+        $check.Tag = $row
+        if ($cand.Kind -eq 'download') {
+            $btns = New-Object System.Windows.Controls.StackPanel
+            $btns.Margin = '12,0,0,0'
+            $btn = New-Object System.Windows.Controls.Button
+            $btn.Style = $script:scanWin.FindResource('Primary')
+            $btn.Content = 'Locate .exe...'
+            $btn.ToolTip = 'Pick the program you installed from this download'
+            $btn.Tag = $row
+            $btn.Add_Click({
+                param($s, $e)
+                [void](Invoke-ScanLocate $s.Tag)
+            })
+            [void]$btns.Children.Add($btn)
+            if ($cand.Key) {
+                $hide = New-Object System.Windows.Controls.Button
+                $hide.Style = $script:scanWin.FindResource('Btn')
+                $hide.Content = "Don't show again"
+                $hide.Margin = '0,6,0,0'
+                $hide.ToolTip = 'Leave this out of future scans (Show hidden brings it back)'
+                $hide.Tag = $row
+                $hide.Add_Click({
+                    param($s, $e)
+                    Hide-ScanRow $s.Tag
+                })
+                [void]$btns.Children.Add($hide)
+            }
+            [System.Windows.Controls.Grid]::SetColumn($btns, 2)
+            [void]$grid.Children.Add($btns)
+        }
+        [void]$grid.Children.Add($check)
+        [void]$grid.Children.Add($stack)
+        $border.Child = $grid
+        [void]$script:sc.SList.Children.Add($border)
+        $script:scanRows.Add($row)
+    }
+
+    # Asks where a downloaded app was installed; returns $true once a program is picked.
+    function Invoke-ScanLocate($r) {
+        $dlg = New-Object Microsoft.Win32.OpenFileDialog
+        $dlg.Title = "Where is $($r.Name.Text) installed? Pick its program (.exe)"
+        $dlg.Filter = 'Programs (*.exe)|*.exe|All files (*.*)|*.*'
+        if (-not $dlg.ShowDialog($script:scanWin)) { return $false }
+        $r.Cand.Exe = $dlg.FileName
+        $r.Cand.Def.exe = $dlg.FileName
+        $r.Path.Text = $dlg.FileName
+        $r.Path.Foreground = '#6C7086'
+        $r.Border.BorderThickness = '0'
+        $r.Check.ToolTip = $null
+        $r.Check.IsChecked = $true
+        Update-ScanSummary
+        return $true
+    }
+
+    function Get-ScanIgnore { return @($script:settings.scanIgnore | Where-Object { $_ } | ForEach-Object { [string]$_ }) }
+
+    function Hide-ScanRow($row) {
+        $list = @(Get-ScanIgnore)
+        if ($list -notcontains $row.Cand.Key) { $list += [string]$row.Cand.Key }
+        Save-Settings @{ scanIgnore = $list }
+        [void]$script:sc.SList.Children.Remove($row.Border)
+        [void]$script:scanRows.Remove($row)
+        $script:scanHidden++
+        Update-ScanSummary
+    }
+
+    function Update-ScanSummary {
+        $cands = @($script:scanRows | ForEach-Object { $_.Cand })
+        if ($cands.Count -eq 0) {
+            $script:sc.SStatus.Text = 'Nothing new found: everything Wintainium recognizes is already in your list. You can still add apps one by one with Add app.'
+            $script:sc.SStatus.Foreground = '#A6E3A1'
+        } else {
+            $needs = @($cands | Where-Object { -not $_.Exe -and $_.Kind -eq 'download' }).Count
+            $msg = "Found $($cands.Count) app$(if ($cands.Count -ne 1) { 's' })."
+            if ($needs) { $msg += " $needs $(if ($needs -eq 1) { 'was' } else { 'were' }) downloaded but not found installed: use Locate .exe to point at $(if ($needs -eq 1) { 'it' } else { 'them' }), leave $(if ($needs -eq 1) { 'it' } else { 'them' }) unticked, or click Don't show again." }
+            $script:sc.SStatus.Text = $msg
+            $script:sc.SStatus.Foreground = '#F9E2AF'
+        }
+        $script:sc.SHidden.Visibility = if ($script:scanHidden -gt 0) { 'Visible' } else { 'Collapsed' }
+        $script:sc.SHidden.Content = "Show hidden ($script:scanHidden)"
+        Update-ScanCount
+    }
+
+    function Show-ScanResults($res) {
+        $script:sc.SList.Children.Clear()
+        $script:scanRows = New-Object System.Collections.Generic.List[object]
+        $cands = @($res.Candidates | Where-Object { $_ })
+        foreach ($c in $cands) { Add-ScanRow $c }
+        $script:scanHidden = if ($res.PSObject.Properties['Hidden']) { [int]$res.Hidden } else { 0 }
+        $extra = @()
+        if ($res.ModCount) { $extra += "Also found $($res.ModCount) mod or texture-pack folder(s) from code-hosting sites. To track one, use Add app with the mod's link and choose its folder." }
+        if ($script:scanExtra.Count) { $extra += "Also scanned: $($script:scanExtra -join ', ')" }
+        $script:sc.SExtra.Text = $extra -join "`n"
+        Update-ScanSummary
+    }
+
+    function Start-PcScan {
+        if ($script:scanJob) { return }
+        $fs = Join-Path $script:Here 'Find-Sources.ps1'
+        if (-not (Test-Path -LiteralPath $fs)) {
+            $script:sc.SStatus.Text = 'Find-Sources.ps1 is missing from the Wintainium folder, so the scan can''t run.'
+            $script:sc.SStatus.Foreground = '#F38BA8'
+            return
+        }
+        $script:sc.SList.Children.Clear()
+        $script:sc.SFolder.IsEnabled = $false
+        $script:sc.SHidden.IsEnabled = $false
+        $script:sc.SAdd.IsEnabled = $false
+        $script:sc.SExtra.Text = ''
+        # runs in the background so the window stays responsive
+        $ps = [PowerShell]::Create()
+        [void]$ps.AddCommand($fs).AddParameter('PassThru').AddParameter('SkipRepos').AddParameter('Config', $Config)
+        if ($script:scanExtra.Count) { [void]$ps.AddParameter('ExtraRoots', [string[]]$script:scanExtra.ToArray()) }
+        $script:scanJob = @{ PS = $ps; Handle = $ps.BeginInvoke(); Start = Get-Date }
+        $script:scanTimer.Start()
+    }
+
+    $script:scanTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $script:scanTimer.Interval = [TimeSpan]::FromMilliseconds(300)
+    $script:scanTimer.Add_Tick({
+        $j = $script:scanJob
+        if (-not $j) { $script:scanTimer.Stop(); return }
+        if (-not $j.Handle.IsCompleted) {
+            $secs = [int]((Get-Date) - $j.Start).TotalSeconds
+            $script:sc.SStatus.Text = "Scanning your PC... $secs s (usually under a minute)"
+            $script:sc.SStatus.Foreground = '#F9E2AF'
+            return
+        }
+        $script:scanTimer.Stop()
+        $script:scanJob = $null
+        $res = $null
+        try {
+            $out = $j.PS.EndInvoke($j.Handle)
+            $res = @($out | Where-Object { $_ -and $_.PSObject.Properties['Candidates'] }) | Select-Object -Last 1
+        } catch { $res = $null }
+        $err = @($j.PS.Streams.Error | Select-Object -First 1)
+        $j.PS.Dispose()
+        $script:sc.SFolder.IsEnabled = $true
+        $script:sc.SHidden.IsEnabled = $true
+        if ($res) {
+            Show-ScanResults $res
+        } else {
+            $why = if ($err.Count) { [string]$err[0] } else { 'no results came back' }
+            $script:sc.SStatus.Text = "The scan didn't finish: $why"
+            $script:sc.SStatus.Foreground = '#F38BA8'
+        }
+    })
+
+    function Add-ScanSelection {
+        $added = 0
+        foreach ($r in $script:scanRows) {
+            if (-not $r.Check.IsChecked -or -not $r.Cand.Exe) { continue }
+            $def = $r.Cand.Def
+            $name = $r.Name.Text.Trim()
+            if (-not $name) { $name = [string]$r.Cand.Name }
+            $base = $name; $n = 2
+            while (@($script:apps | Where-Object { $_.name -eq $name }).Count) { $name = "$base ($n)"; $n++ }
+            $def.name = $name
+            $script:apps = @($script:apps) + $def
+            $added++
+        }
+        if ($added) {
+            ConvertTo-Json -InputObject @($script:apps) -Depth 6 | Set-Content -LiteralPath $Config -Encoding UTF8
+            Write-Host "Added $added app$(if ($added -ne 1) { 's' }) from the scan." -ForegroundColor Green
+        }
+        $script:scanAdded += $added
+        $script:scanWin.Close()
+    }
+
+    # Opens the scan window and returns how many apps were added.
+    function Show-ScanWindow {
+        $script:scanAdded = 0
+        $script:scanWin = New-Xaml $scanXaml
+        $script:scanWin.Owner = if ($script:wizard -and $script:wizard.IsVisible) { $script:wizard } else { $script:win }
+        if ($script:win.Icon) { $script:scanWin.Icon = $script:win.Icon }
+        $script:sc = @{}
+        foreach ($n in 'SStatus', 'SList', 'SExtra', 'SFolder', 'SHidden', 'SAdd', 'SClose') { $script:sc[$n] = $script:scanWin.FindName($n) }
+        $script:scanRows = New-Object System.Collections.Generic.List[object]
+        $script:sc.SAdd.Add_Click({ Add-ScanSelection })
+        $script:sc.SHidden.Add_Click({
+            Save-Settings @{ scanIgnore = @() }
+            Start-PcScan
+        })
+        $script:sc.SClose.Add_Click({ $script:scanWin.Close() })
+        $script:sc.SFolder.Add_Click({
+            Add-Type -AssemblyName System.Windows.Forms
+            $d = New-Object System.Windows.Forms.FolderBrowserDialog
+            $d.Description = 'Pick a folder where you keep apps, emulators or games'
+            if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK -and -not $script:scanExtra.Contains($d.SelectedPath)) {
+                $script:scanExtra.Add($d.SelectedPath)
+                Start-PcScan
+            }
+        })
+        $script:scanWin.Add_Closing({
+            if ($script:scanJob) {
+                try { $script:scanJob.PS.Stop(); $script:scanJob.PS.Dispose() } catch { Write-Verbose 'scan stop failed' }
+                $script:scanJob = $null
+                $script:scanTimer.Stop()
+            }
+        })
+        $script:scanWin.Add_ContentRendered({ Start-PcScan })
+        [void]$script:scanWin.ShowDialog()
+        return $script:scanAdded
+    }
+
+    function Get-ShortcutTarget {
+        $exe = Join-Path $script:Here 'Wintainium.exe'
+        if (Test-Path -LiteralPath $exe) { return @{ Target = $exe; Args = '' } }
+        return @{ Target = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"; Args = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $script:Here 'Wintainium.ps1')`" gui" }
+    }
+
+    function Update-WizardTokenStatus {
+        if (Test-Path -LiteralPath $script:tokenFile) {
+            $until = if ($script:tokenExpires) { "expires $(([datetime]$script:tokenExpires).ToString('yyyy-MM-dd'))" } else { 'no expiry date recorded' }
+            $script:wz.TokenResult.Text = "A token is already saved ($until). Paste a new one only if you want to replace it, or click Next."
+            $script:wz.TokenResult.Foreground = '#A6ADC8'
+        } else {
+            $script:wz.TokenResult.Text = 'No token saved. You can skip this with Next and add one later with Setup.'
+            $script:wz.TokenResult.Foreground = '#A6ADC8'
+        }
+    }
+
+    function Set-WizardPage([int]$n) {
+        $script:wzPage = $n
+        foreach ($i in 1..5) { $script:wz["P$i"].Visibility = if ($i -eq $n) { 'Visible' } else { 'Collapsed' } }
+        $script:wz.StepLabel.Text = "Step $n of 5"
+        $script:wz.WBack.Visibility = if ($n -gt 1) { 'Visible' } else { 'Hidden' }
+        $script:wz.WNext.Content = if ($n -eq 5) { 'Finish' } else { 'Next' }
+    }
+
+    function Select-WizardFolder($box) {
+        Add-Type -AssemblyName System.Windows.Forms
+        $d = New-Object System.Windows.Forms.FolderBrowserDialog
+        if ($box.Text -and (Test-Path -LiteralPath $box.Text)) { $d.SelectedPath = $box.Text }
+        if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $box.Text = $d.SelectedPath }
+    }
+
+    function Complete-Wizard {
+        $inst = $script:wz.InstallBox.Text.Trim()
+        $dl = $script:wz.DownloadBox.Text.Trim()
+        if (-not $inst) { $inst = $InstallRoot }
+        if (-not $dl) { $dl = $DownloadDir }
+        $script:InstallRoot = $inst
+        $script:DownloadDir = $dl
+        Save-Settings @{ installRoot = $inst; downloadDir = $dl; setupDone = $true }
+        $t = Get-ShortcutTarget
+        foreach ($pair in @(@($script:wz.SCDesktop, [Environment]::GetFolderPath('Desktop')), @($script:wz.SCStart, [Environment]::GetFolderPath('Programs')))) {
+            if (-not $pair[0].IsChecked) { continue }
+            try {
+                $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $pair[1] 'Wintainium.lnk'))
+                $lnk.TargetPath = $t.Target
+                $lnk.Arguments = $t.Args
+                $lnk.WorkingDirectory = $script:Here
+                $lnk.Description = 'Wintainium: keep hand-installed apps up to date'
+                $ico = Get-ShellIcon
+                if ($ico) { $lnk.IconLocation = $ico }
+                $lnk.Save()
+                Set-ShortcutAppId (Join-Path $pair[1] 'Wintainium.lnk')
+            } catch { Write-Host "Could not create a shortcut in $($pair[1]): $($_.Exception.Message)" -ForegroundColor Yellow }
+        }
+        Write-Host "Setup saved. New apps go to $inst, downloads to $dl." -ForegroundColor Green
+        $script:wizard.Close()
+    }
+
+    function Show-SetupWizard {
+        $script:wizard = New-Xaml $wizardXaml
+        $script:wizard.Owner = $script:win
+        if ($script:win.Icon) { $script:wizard.Icon = $script:win.Icon }
+        $script:wz = @{}
+        foreach ($n in 'StepLabel', 'P1', 'P2', 'P3', 'P4', 'P5', 'ScanNow', 'ScanResult', 'InstallBox', 'DownloadBox', 'BrowseInstall', 'BrowseDownload', 'OpenGitHub', 'TokenBox', 'CheckToken', 'TokenResult', 'SCDesktop', 'SCStart', 'WCancel', 'WNext', 'WBack') {
+            $script:wz[$n] = $script:wizard.FindName($n)
+        }
+        $script:wz.InstallBox.Text = $InstallRoot
+        $script:wz.DownloadBox.Text = $DownloadDir
+        Update-WizardTokenStatus
+        $script:wz.BrowseInstall.Add_Click({ Select-WizardFolder $script:wz.InstallBox })
+        $script:wz.BrowseDownload.Add_Click({ Select-WizardFolder $script:wz.DownloadBox })
+        $script:wz.OpenGitHub.Add_Click({ Start-Process $script:TokenPageUrl })
+        $script:wz.CheckToken.Add_Click({
+            $script:wz.TokenResult.Text = 'Checking with GitHub...'
+            $script:wz.TokenResult.Foreground = '#A6ADC8'
+            Invoke-UiPump
+            $plain = $script:wz.TokenBox.Password
+            $t = Test-GitHubToken $plain
+            if ($t.Ok -and $t.Safe) {
+                Save-GitHubToken $plain $t.Expires
+                $until = if ($t.Expires) { "It expires $($t.Expires.ToString('yyyy-MM-dd'))." } else { 'It has no expiry date.' }
+                $script:wz.TokenResult.Text = "Saved. $($t.Message) GitHub now allows $($t.Limit) lookups an hour. $until"
+                $script:wz.TokenResult.Foreground = '#A6E3A1'
+                $script:wz.TokenBox.Password = ''
+            } else {
+                $script:wz.TokenResult.Text = "$($t.Message) Nothing was saved."
+                $script:wz.TokenResult.Foreground = '#F38BA8'
+            }
+        })
+        $script:wz.WBack.Add_Click({ if ($script:wzPage -gt 1) { Set-WizardPage ($script:wzPage - 1) } })
+        $script:wz.WNext.Add_Click({ if ($script:wzPage -lt 5) { Set-WizardPage ($script:wzPage + 1) } else { Complete-Wizard } })
+        $script:wz.ScanNow.Add_Click({
+            # the scan should look in the folder picked on step 2 as well
+            $inst = $script:wz.InstallBox.Text.Trim()
+            if ($inst -and -not $script:scanExtra.Contains($inst)) { $script:scanExtra.Add($inst) }
+            $n = Show-ScanWindow
+            $script:wizardScanned += $n
+            $script:wz.ScanResult.Text = if ($script:wizardScanned) { "Added $($script:wizardScanned) app$(if ($script:wizardScanned -ne 1) { 's' }) to your list. Click Next." } else { 'Nothing added. You can scan again any time with the Scan button.' }
+        })
+        $script:wz.WCancel.Add_Click({ $script:wizard.Close() })
+        $script:wizardScanned = 0
+        Set-WizardPage 1
+        [void]$script:wizard.ShowDialog()
+        # closing or cancelling still counts as "seen", so it doesn't pop up on every start
+        if (-not $script:settings.setupDone) { Save-Settings @{ setupDone = $true } }
+    }
+
+
     $script:win = New-Xaml $mainXaml
     $script:win.Title = "Wintainium $script:AppVersion"
     $ico = Join-Path $script:Here 'assets\icon.ico'
     if (Test-Path -LiteralPath $ico) {
-        try { $script:win.Icon = [System.Windows.Media.Imaging.BitmapFrame]::Create([uri]$ico) } catch { Write-Verbose 'icon not loaded' }
+        # read into memory so the window doesn't keep icon.ico open
+        try {
+            $ms = New-Object System.IO.MemoryStream(, [IO.File]::ReadAllBytes($ico))
+            $script:win.Icon = [System.Windows.Media.Imaging.BitmapFrame]::Create($ms, [System.Windows.Media.Imaging.BitmapCreateOptions]::None, [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad)
+        } catch { Write-Verbose 'icon not loaded' }
     }
+    $script:win.Add_SourceInitialized({
+        if (-not $script:HasShellIds) { return }
+        try {
+            $h = (New-Object System.Windows.Interop.WindowInteropHelper($script:win)).Handle
+            [WintainiumShell]::SetWindowAppId($h, $script:AppId, (Get-RelaunchCommand), 'Wintainium', (Get-ShellIcon))
+        } catch { Write-Verbose "window id not set: $($_.Exception.Message)" }
+    })
     $script:ui = @{}
-    foreach ($n in 'Summary', 'Grid', 'Log', 'LogScroll', 'Status', 'Search', 'SearchHint', 'OnlyUpdates', 'BtnUpdate', 'BtnAll', 'BtnNotes', 'BtnLaunch', 'BtnPage', 'BtnFolder', 'BtnAdd', 'BtnRefresh', 'BtnForce') {
+    foreach ($n in 'Summary', 'Grid', 'Log', 'LogScroll', 'Status', 'Search', 'SearchHint', 'OnlyUpdates', 'BtnUpdate', 'BtnAll', 'BtnNotes', 'BtnLaunch', 'BtnPage', 'BtnFolder', 'BtnAdd', 'BtnRefresh', 'BtnForce', 'BtnSetup', 'BtnScan') {
         $script:ui[$n] = $script:win.FindName($n)
     }
     $script:logItems = New-Object System.Collections.ObjectModel.ObservableCollection[object]
@@ -1196,6 +2069,7 @@ STYLES
         $script:promptContext.Clear()
         $script:dlg = New-Xaml $dialogXaml
         $script:dlg.Owner = $script:win
+        if ($script:win.Icon) { $script:dlg.Icon = $script:win.Icon }
         $script:dlgResult = ''
         $d = @{}
         foreach ($n in 'Ctx', 'Prompt', 'Input', 'B1', 'B2', 'B3') { $d[$n] = $script:dlg.FindName($n) }
@@ -1229,7 +2103,7 @@ STYLES
 
     function Set-Busy([bool]$on, [string]$label) {
         $script:busy = $on
-        foreach ($n in 'BtnUpdate', 'BtnAll', 'BtnNotes', 'BtnLaunch', 'BtnPage', 'BtnFolder', 'BtnAdd', 'BtnRefresh', 'BtnForce') { $script:ui[$n].IsEnabled = -not $on }
+        foreach ($n in 'BtnUpdate', 'BtnAll', 'BtnNotes', 'BtnLaunch', 'BtnPage', 'BtnFolder', 'BtnAdd', 'BtnRefresh', 'BtnForce', 'BtnSetup', 'BtnScan') { $script:ui[$n].IsEnabled = -not $on }
         $script:ui.Status.Text = if ($on) { $label } else { 'Ready' }
         Invoke-UiPump
     }
@@ -1262,12 +2136,7 @@ STYLES
             $script:ui.Summary.Text = (($parts + "$($script:rows.Count) apps", $when) -join '  -  ')
             $script:ui.Summary.Foreground = if ($n) { '#F9E2AF' } else { '#F38BA8' }
         }
-        if (@($script:rows | Where-Object { $_.Status -eq 'rate limited' }).Count -gt 0) {
-            Write-Host 'Some lookups hit GitHub''s hourly limit. Run ".\Wintainium.ps1 token" once to save a token.' -ForegroundColor Yellow
-        }
-        if (@($script:rows | Where-Object { $_.Status -eq 'token rejected' }).Count -gt 0) {
-            Write-Host 'GitHub rejected the saved token (expired or revoked). Make a new one and run ".\Wintainium.ps1 token".' -ForegroundColor Yellow
-        }
+        Show-LookupNotes $script:rows
     }
 
     function Test-RowVisible($o) {
@@ -1285,6 +2154,7 @@ STYLES
     function Show-Notes($r) {
         $script:notesWin = New-Xaml $notesXaml
         $script:notesWin.Owner = $script:win
+        if ($script:win.Icon) { $script:notesWin.Icon = $script:win.Icon }
         $script:notesRow = $r
         $script:notesWin.FindName('NTitle').Text = "$($r.App)  $($r.Latest)"
         $script:notesWin.FindName('NSub').Text = if ($r.Released) { "Released $($r.Released)  -  you have $($r.Installed)" } else { "You have $($r.Installed)" }
@@ -1360,6 +2230,26 @@ STYLES
         $mi.Add_Click($item.a)
         [void]$menu.Items.Add($mi)
     }
+    # Wintainium's own row only: switch the gold name on or off
+    $script:goldSep = New-Object System.Windows.Controls.Separator
+    $script:goldItem = New-Object System.Windows.Controls.MenuItem
+    $script:goldItem.Header = 'Show Wintainium in gold'
+    $script:goldItem.IsCheckable = $true
+    $script:goldItem.Add_Click({
+        $on = [bool]$script:goldItem.IsChecked
+        Save-Settings @{ goldSelf = $on }
+        foreach ($r in @($script:rows)) { if ($r.Self) { $r.Gold = $on } }
+        [System.Windows.Data.CollectionViewSource]::GetDefaultView($script:ui.Grid.ItemsSource).Refresh()
+    })
+    [void]$menu.Items.Add($script:goldSep)
+    [void]$menu.Items.Add($script:goldItem)
+    $menu.Add_Opened({
+        $r = Get-Selected
+        $show = if ($r -and $r.Self) { 'Visible' } else { 'Collapsed' }
+        $script:goldSep.Visibility = $show
+        $script:goldItem.Visibility = $show
+        $script:goldItem.IsChecked = ($script:settings.goldSelf -ne $false)
+    })
     $script:ui.Grid.ContextMenu = $menu
 
     $script:win.Add_KeyDown({
@@ -1371,7 +2261,12 @@ STYLES
     })
     $script:ui.BtnRefresh.Add_Click({ Invoke-Busy 'Checking...' { Update-Grid } })
     $script:ui.BtnForce.Add_Click({ Invoke-Busy 'Re-checking every release source...' { Update-Grid -Force } })
-    $script:win.Add_ContentRendered({ Invoke-Busy 'Checking...' { Update-Grid } })
+    $script:ui.BtnSetup.Add_Click({ if (-not $script:busy) { Show-SetupWizard; Invoke-Busy 'Checking...' { Update-Grid } } })
+    $script:ui.BtnScan.Add_Click({ if (-not $script:busy) { if ((Show-ScanWindow) -gt 0) { Invoke-Busy 'Checking...' { Update-Grid } } } })
+    $script:win.Add_ContentRendered({
+        if ($Command -eq 'setup' -or -not $script:settings.setupDone) { Show-SetupWizard }
+        Invoke-Busy 'Checking...' { Update-Grid }
+    })
 
     [void]$script:win.ShowDialog()
     return

@@ -39,7 +39,9 @@ It is one PowerShell script with a dark, sortable window (or a console menu if y
 - **Window:** search, an "only show updates" filter, release notes ("What's new"), Launch, Open folder, a right-click menu, double-click to update, and F5 to refresh.
 - **Add apps from a URL:** paste a GitHub, GitLab, Forgejo or itch.io link. Wintainium can track a copy you already have, or install a fresh one.
 - **Mods and data packs too:** a release with no program inside (a widescreen patch, a texture pack) is tracked by the release you installed, and flagged when a newer one is published.
-- **Light on GitHub's rate limit:** lookups are cached for an hour, and an optional token is stored encrypted with Windows DPAPI.
+- **Easy start:** download the zip, double-click `Wintainium.exe`, and a short setup wizard asks where new apps should go, walks you through an optional no-permission GitHub token, finds the apps you already have, and adds shortcuts.
+- **Scan your PC:** the **Scan** button finds emulators and tools Wintainium recognizes at their usual paths, plus programs whose files came from GitHub, GitLab, Codeberg or itch.io, and adds the ones you tick in one go. Read-only until you click Add.
+- **Light on GitHub's rate limit:** lookups are cached for an hour, and an optional token is stored encrypted with Windows DPAPI. If a site is briefly down, the last known version is shown instead of an error.
 - **`Find-Sources.ps1`:** a read-only scan that lists everything on your PC that came from a code-hosting site (downloads, git clones, untracked programs, mods), so nothing gets missed.
 
 ## Contents
@@ -52,7 +54,7 @@ Wintainium is an **unsigned PowerShell script that downloads and runs other prog
 
 What it does to keep that reasonable:
 
-- **Readable:** no compiled parts, no obfuscation, no telemetry. It only talks to the release sources you add, plus GitHub's API.
+- **Readable:** all the logic is in two PowerShell scripts, with no obfuscation and no telemetry. It only talks to the release sources you add, plus GitHub's API. The only compiled file is `Wintainium.exe` in the release zip, a short launcher that starts `Wintainium.ps1`; its source is in [`launcher/`](launcher/WintainiumLauncher.cs), and you can skip it and run the script directly.
 - **Verified downloads:** where a release publishes a SHA-256 checksum, the download is checked against it and deleted on a mismatch.
 - **SmartScreen stays in the loop:** downloads keep Windows' "downloaded from the internet" mark, so Windows still checks them before they run.
 - **Hands off your security settings:** it never restores quarantined files, allows threats, or adds Defender exclusions. When Windows Security removes something, it explains why and leaves the decision to you.
@@ -60,25 +62,33 @@ What it does to keep that reasonable:
 
 A safe way to start is `.\Wintainium.ps1 list`, which only reads and prints the status table.
 
+`Wintainium.exe` isn't code-signed, so the first time you open it Windows SmartScreen may say "Windows protected your PC". Click **More info** and then **Run anyway** if you're comfortable, or run the script yourself instead.
+
 ## Install
 
-Windows 10 or 11 with Windows PowerShell 5.1 (built in). PowerShell 7 works for the console menu.
+Windows 10 or 11. Everything it needs (Windows PowerShell 5.1 and .NET Framework 4) is built in.
 
-Grab the source zip from the [latest release](https://github.com/Ay1man2/Wintainium/releases/latest) and unzip it anywhere, or clone it:
+**Easiest:**
+
+1. From the [latest release](https://github.com/Ay1man2/Wintainium/releases/latest), download **`Wintainium-<version>.zip`** under Assets (not "Source code").
+2. Unzip it to a folder you'll keep, for example `Documents\Wintainium`. Your app list and settings are saved in that folder.
+3. Double-click **`Wintainium.exe`**. If SmartScreen appears, see [Before you run it](#before-you-run-it).
+4. The setup wizard asks where new apps should go, offers the optional [GitHub token](#github-token-optional), scans for apps you already have, and adds Desktop and Start menu shortcuts. Pin Wintainium by right-clicking its taskbar button while it's open. Reopen the wizard any time with **Setup**.
+
+**From the source:**
 
 ```powershell
 git clone https://github.com/Ay1man2/Wintainium.git C:\code\Wintainium
 cd C:\code\Wintainium
 Unblock-File .\*.ps1
-.\Wintainium.ps1 shortcut     # desktop shortcut that opens the window
+.\Wintainium.ps1 setup       # opens the window with the setup wizard
 ```
-
-Pass `-InstallRoot 'D:\Apps'` to `shortcut` to choose where new apps are installed. The default is `%USERPROFILE%\Wintainium\Apps`.
 
 ## Use
 
 ```powershell
-.\Wintainium.ps1 gui      # the window
+.\Wintainium.ps1 gui      # the window (what Wintainium.exe opens)
+.\Wintainium.ps1 setup    # the window, starting with the setup wizard
 .\Wintainium.ps1          # console menu
 .\Wintainium.ps1 list     # print the table and exit
 .\Wintainium.ps1 token    # save a GitHub token (see below)
@@ -112,26 +122,40 @@ Apps live in `wintainium-apps.json` next to the script. It is created empty on f
 
 ## GitHub token (optional)
 
-GitHub allows 60 anonymous lookups an hour. A token raises that to 5,000. Create a classic token with **no scopes**, so it can only read public data, then run:
+Most apps are checked on GitHub, which allows 60 lookups an hour without a token, so a list of 30 apps can run out after two refreshes. A free token raises that to 5,000.
+
+Wintainium asks for a **classic token with no scopes** (no boxes ticked). A token like that can't read your private repositories or change anything on your account; it only tells GitHub who is asking. The setup wizard (**Setup** in the window) opens [GitHub's token page](https://github.com/settings/tokens/new?description=Wintainium%20(read-only%2C%20no%20scopes)&scopes=) with nothing ticked, checks the token you paste, refuses one that has permissions, and reads its real expiry date from GitHub. From the console, the same thing is:
 
 ```powershell
 .\Wintainium.ps1 token
 ```
 
-It is checked with GitHub and saved to `wintainium-token.xml`, encrypted so only your Windows account on this PC can read it. Wintainium warns you a week before the token expires.
+The token is saved to `wintainium-token.xml`, encrypted with Windows DPAPI so only your Windows account on this PC can read it. Wintainium reminds you a week before it expires.
 
 ## Find what you have
+
+Click **Scan** (or use step 4 of the setup wizard). Wintainium looks for:
+
+- **Recognized apps** at their usual install paths, such as EmuDeck's emulators, ES-DE, Steam ROM Manager and Playnite. These come with the right release source and update method already filled in; the list is [`known-apps.json`](known-apps.json).
+- **Programs whose files came from a code-hosting site or an itch.io page**, using Windows' "downloaded from" mark on the files (or on the zip they were unpacked from).
+- **Downloads** from those sites where the installed program wasn't found. These have an amber edge: click **Locate .exe** (or tick the box) to pick the installed program, or click **Don't show again** to leave it out of future scans. **Show hidden** brings those back. Files that can't be a Windows program (Android `.apk`, Linux and macOS builds) are skipped.
+- **Wintainium itself**, so you hear when a new Wintainium release is out. Its row is shown in gold; right-click it to turn that off.
+
+It only reads files. You tick what to add, can rename entries, and **Scan another folder** covers places like `D:\Games`. Mods and texture packs it finds are mentioned but not added; use **Add app** with the mod's link for those.
+
+For a full report, including cloned git repositories and mods, run the scanner on its own:
 
 ```powershell
 .\Find-Sources.ps1 -ExtraRoots 'D:\Games', 'C:\MyEmulators'
 ```
 
-The scan reads Windows' download records, git remotes and emulator folders, then writes `sources-inventory.csv` to your Desktop. It ends by listing projects found on your PC that Wintainium does not track yet. It never changes anything.
+It writes `sources-inventory.csv` to your Desktop and never changes anything.
 
 ## Notes and limits
 
 - Wintainium updates programs. It never downloads games, BIOS files, firmware or keys.
-- itch.io has no public release API, so the version is read from the game's page and updates open that page.
+- itch.io has no public release API, so the version is read from the game's page and updates open that page. itch.io sometimes refuses automated page requests for a few minutes.
+- **site busy** means a release site (anything other than GitHub) didn't answer; try Refresh later. If Wintainium checked that app before, it shows the last known version marked **(cached)** instead, with a note saying when it was fetched. **token rejected** and **rate limited** only ever refer to GitHub.
 - The `emudeck` method calls EmuDeck's own scripts from `%APPDATA%\EmuDeck\backend`. Where EmuDeck pins an old build (ScummVM at the time of writing), use `zip` with the project's own releases.
 - `zip` updates replace the files a release contains. Your settings normally live outside those files, and the folder is backed up first.
 - To track a mod, add its repo and either let Wintainium install it, or give the mod's folder when asked for the .exe. If the mod is loaded from another program's folder (an emulator's mod folder, say), set `installDir` to that folder so updates land where they are used.
@@ -142,11 +166,17 @@ The scan reads Windows' download records, git remotes and emulator folders, then
 .\tests\Run-Tests.ps1
 ```
 
-It runs every suite under each PowerShell installed (Windows PowerShell 5.1 and PowerShell 7 on Windows). The suites mock the release servers and Windows-only parts, so they also run under PowerShell 7 on Linux and macOS. They cover status detection, every release source, the cache, downloads, checksums, quarantine handling, add-app, remove, and starting the script the way the desktop shortcut does. The WPF window is not covered.
+It runs every suite under each PowerShell installed (Windows PowerShell 5.1 and PowerShell 7 on Windows). The suites mock the release servers and Windows-only parts, so they also run under PowerShell 7 on Linux and macOS. They cover status detection, every release source, the cache and its fallback when a site is down, error messages, GitHub token checks, the settings file, scan results and recognized apps, downloads, checksums, quarantine handling, add-app, remove, and starting the script the way the desktop shortcut does. The WPF window, the setup wizard, the scan window and the .exe launcher are not covered.
+
+To build the release download (runs the tests, compiles `Wintainium.exe` with the C# compiler built into Windows, and writes `dist\Wintainium-<version>.zip` and its `.sha256`):
+
+```powershell
+.\build\Build-Release.ps1
+```
 
 ## How it was built
 
-Wintainium was built in one long working session with Claude, Anthropic's AI assistant. I described what I wanted, ran every version on my own PC and reported back what happened. Claude wrote most of the code, the test suites, the logo and these docs, and fixed what my test runs turned up, including a Windows PowerShell 5.1 bug the tests now cover.
+Wintainium was built in one long working session with Claude. I described what I wanted, ran every version on my own PC and reported back what happened. Claude wrote most of the code, the test suites, the logo and these docs, and fixed what my test runs turned up, including a Windows PowerShell 5.1 bug the tests now cover.
 
 Everything here was tested on my machine (Windows 11, about 28 tracked apps) before release. Still, treat it as a personal tool rather than polished software, and read the script before you run it, as you would with any script that downloads programs.
 

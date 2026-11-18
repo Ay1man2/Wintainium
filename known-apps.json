@@ -1,0 +1,125 @@
+[
+  {
+    "name": "PCSX2",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\PCSX2-Qt\\pcsx2-qtx64.exe"],
+    "source": "github", "repo": "PCSX2/pcsx2", "prerelease": true, "graceDays": 30,
+    "update": ["emudeck", "inapp", "page"], "emudeckFn": "PCSX2QT_install", "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "DuckStation",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\duckstation\\duckstation-qt-x64-ReleaseLTCG.exe"],
+    "source": "github", "repo": "stenzek/duckstation", "tag": "latest", "graceDays": 30,
+    "update": ["emudeck", "inapp", "page"], "emudeckFn": "DuckStation_install", "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "RPCS3",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\RPCS3\\rpcs3.exe"],
+    "source": "github", "repo": "RPCS3/rpcs3-binaries-win", "graceDays": 30,
+    "update": ["emudeck", "inapp", "page"], "emudeckFn": "RPCS3_install", "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "xemu",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\xemu\\xemu.exe"],
+    "source": "github", "repo": "xemu-project/xemu",
+    "update": ["emudeck", "inapp", "page"], "emudeckFn": "Xemu_install"
+  },
+  {
+    "name": "Vita3K",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\Vita3K\\Vita3K.exe"],
+    "source": "github", "repo": "Vita3K/Vita3K", "tag": "continuous", "graceDays": 30,
+    "update": ["emudeck", "page"], "emudeckFn": "Vita3K_install"
+  },
+  {
+    "name": "PPSSPP",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\PPSSPP\\PPSSPPWindows64.exe"],
+    "source": "github", "repo": "hrydgard/ppsspp",
+    "update": ["emudeck", "page"], "emudeckFn": "PPSSPP_install"
+  },
+  {
+    "name": "shadPS4 QtLauncher",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\ShadPS4-qt\\shadPS4QtLauncher.exe"],
+    "source": "github", "repo": "shadps4-emu/shadps4-qtlauncher", "prerelease": true, "graceDays": 30,
+    "update": ["emudeck", "inapp", "page"], "emudeckFn": "ShadPS4_install", "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "Xenia Canary",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\xenia\\xenia_canary.exe"],
+    "source": "github", "repo": "xenia-canary/xenia-canary", "graceDays": 30,
+    "update": ["emudeck", "page"], "emudeckFn": "Xenia_install"
+  },
+  {
+    "name": "RetroArch",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\RetroArch\\retroarch.exe", "C:\\RetroArch-Win64\\retroarch.exe"],
+    "source": "github", "repo": "libretro/RetroArch",
+    "update": ["emudeck", "page"], "emudeckFn": "RetroArch_install"
+  },
+  {
+    "name": "Azahar",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\azahar\\azahar.exe"],
+    "source": "github", "repo": "azahar-emu/azahar",
+    "update": ["emudeck", "page"], "emudeckFn": "Azahar_install"
+  },
+  {
+    "name": "Cemu",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\cemu\\Cemu.exe"],
+    "source": "github", "repo": "cemu-project/Cemu",
+    "update": ["emudeck", "inapp", "page"], "emudeckFn": "Cemu_install", "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "Dolphin",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\Dolphin-x64\\Dolphin.exe"],
+    "source": "dolphin", "api": "https://dolphin-emu.org/update/latest/beta/",
+    "update": ["emudeck", "inapp", "page"], "emudeckFn": "Dolphin_install", "hint": "Help > Check for Updates"
+  },
+  {
+    "name": "PrimeHack",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\PrimeHack\\PrimeHack.exe"],
+    "source": "github", "repo": "shiiion/dolphin",
+    "update": ["emudeck", "page"], "emudeckFn": "Primehack_install"
+  },
+  {
+    "name": "melonDS",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\melonDS\\melonDS.exe"],
+    "source": "github", "repo": "melonDS-emu/melonDS",
+    "update": ["emudeck", "page"], "emudeckFn": "melonDS_install"
+  },
+  {
+    "name": "mGBA",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\mGBA\\mGBA.exe"],
+    "source": "github", "repo": "mgba-emu/mgba",
+    "update": ["zip", "page"], "asset": "(?i)win64\\.7z$",
+    "note": "EmuDeck pins an old build, so this installs from the mGBA release"
+  },
+  {
+    "name": "ES-DE",
+    "exe": ["%APPDATA%\\EmuDeck\\EmulationStation-DE\\ES-DE.exe"],
+    "source": "gitlab", "api": "https://gitlab.com/api/v4/projects/es-de%2Femulationstation-de/releases/permalink/latest",
+    "update": ["emudeck", "page"], "emudeckFn": "ESDE_install"
+  },
+  {
+    "name": "Steam ROM Manager",
+    "exe": ["{EmulationPath}\\tools\\srm.exe"],
+    "source": "github", "repo": "SteamGridDB/steam-rom-manager",
+    "update": ["emudeck", "page"], "emudeckFn": "SRM_install"
+  },
+  {
+    "name": "ScummVM",
+    "exe": ["%APPDATA%\\EmuDeck\\Emulators\\ScummVM\\scummvm.exe"],
+    "source": "github", "repo": "scummvm/scummvm",
+    "update": ["zip", "page"], "downloadUrl": "https://downloads.scummvm.org/frs/scummvm/{version}/scummvm-{version}-win32-x86_64.zip",
+    "note": "EmuDeck pins an old build, so this installs from scummvm.org"
+  },
+  {
+    "name": "Vibepollo",
+    "exe": ["C:\\Program Files\\Apollo\\sunshine.exe", "C:\\Program Files\\Vibepollo\\sunshine.exe"],
+    "source": "github", "repo": "Nonary/Vibepollo",
+    "update": ["installer", "page"], "asset": "(?i)\\.(exe|msi)$"
+  },
+  {
+    "name": "Playnite",
+    "exe": ["%LOCALAPPDATA%\\Playnite\\Playnite.dll"],
+    "launch": "%LOCALAPPDATA%\\Playnite\\Playnite.DesktopApp.exe",
+    "source": "github", "repo": "JosefNemec/Playnite",
+    "update": ["inapp", "page"], "hint": "Menu > Check for updates"
+  }
+]

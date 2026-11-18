@@ -7,3 +7,8 @@ emu-cache.json
 emu-token.xml
 # output of Find-Sources.ps1
 sources-inventory.csv
+# settings chosen in the setup wizard (folders)
+wintainium-settings.json
+# release builds (build\Build-Release.ps1)
+dist/
+*.exe
