@@ -1,5 +1,5 @@
 name: Feature or change
-description: New behaviour, a new release source or update method, or a change to how something works. Scoped so Claude can build it in one pass.
+description: New behaviour, a new release source or update method, or a change to how something works. Scoped so it can be built in one pass.
 title: "feat: "
 labels: ["enhancement"]
 body:
