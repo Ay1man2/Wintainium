@@ -1,5 +1,5 @@
 name: Bug
-description: Something Wintainium did wrong. Written so Claude can reproduce, fix and add a test.
+description: Something Wintainium did wrong. Detailed enough to reproduce, fix and cover with a test.
 title: "bug: "
 labels: ["bug"]
 body:
