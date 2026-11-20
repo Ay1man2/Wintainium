@@ -14,7 +14,7 @@
   <img src="assets/screenshot.png" alt="The Wintainium window listing tracked emulators and tools with their update status" width="820">
 </p>
 
-> **Shared as-is.** Wintainium is a personal project I'm sharing for others to clone, fork and tinker with. I'm not maintaining it for others or taking issues and pull requests; see [Contributing](#contributing). It downloads and runs programs, so please review the code and use it at your own discretion; see [Before you run it](#before-you-run-it).
+> **Shared as-is.** Wintainium is a personal project I'm sharing for others to clone, fork and tinker with. I'm not maintaining it for others: issues are open, but they're my own backlog for developing it with Claude, and I'm not taking feature requests or pull requests; see [Contributing](#contributing). It downloads and runs programs, so please review the code and use it at your own discretion; see [Before you run it](#before-you-run-it).
 
 **Wintainium** keeps the Windows apps you install by hand up to date: emulators, PC ports, mods and tools that live on release pages instead of in a store or package manager. It is inspired by [Obtainium](https://github.com/ImranR98/Obtainium) on Android, but is an independent project with no affiliation to Obtainium, EmuDeck or Microsoft.
 
@@ -184,7 +184,7 @@ Everything here was tested on my machine (Windows 11, about 28 tracked apps) bef
 
 Wintainium is a personal project, shared as-is for anyone who finds it useful. **You're very welcome to fork it** and make it your own: add sources, change the look, rework it for your setup.
 
-I'm not maintaining it for others, so I'm not taking issues, feature requests or pull requests at the moment. If you build something on top of it, a fork is the place for it. More in [CONTRIBUTING.md](CONTRIBUTING.md).
+I'm not maintaining it for others. Issues are turned on, but they're my own backlog for developing Wintainium with Claude, not a support channel: I'm not taking feature requests or pull requests from others at the moment. If you build something on top of it, a fork is the place for it. More in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Changelog
 

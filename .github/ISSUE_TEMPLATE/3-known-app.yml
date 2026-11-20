@@ -1,0 +1,124 @@
+name: Recognize an app (known-apps.json)
+description: Teach Scan to find an emulator or tool at its usual path, with source and update method filled in.
+title: "known-app: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This becomes one entry in `known-apps.json`. The more of these fields come straight off your PC and the release page, the less Claude has to guess.
+
+  - type: input
+    id: name
+    attributes:
+      label: App name
+      placeholder: Ryujinx
+    validations:
+      required: true
+
+  - type: input
+    id: release-url
+    attributes:
+      label: Release page URL
+      placeholder: https://github.com/owner/repo/releases
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Source
+      options:
+        - github
+        - gitlab
+        - gitea / Forgejo / Codeberg
+        - itch
+        - dolphin
+        - manual / downloadUrl template
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Release channel
+      options:
+        - Stable releases
+        - Pre-releases / nightlies (prerelease true)
+        - Rolling tag (latest, continuous, nightly...)
+        - Not sure
+
+  - type: textarea
+    id: paths
+    attributes:
+      label: Install paths
+      description: Every place the exe usually lives, one per line, using environment variables. Include the EmuDeck path and a standalone install path if both exist.
+      placeholder: |
+        %APPDATA%\EmuDeck\Emulators\example\example.exe
+        %LOCALAPPDATA%\Programs\Example\example.exe
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: assets
+    attributes:
+      label: Asset file names from the latest release
+      description: Copy all of them, including checksum files, so the `asset` regex can be written and tested against the real names.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: methods
+    attributes:
+      label: Update methods, in preference order
+      description: Pick all that work for this app. Claude will order them emudeck → inapp → installer/zip → page unless you say otherwise below.
+      multiple: true
+      options:
+        - emudeck
+        - inapp
+        - installer
+        - zip
+        - download
+        - page
+    validations:
+      required: true
+
+  - type: input
+    id: emudeck-fn
+    attributes:
+      label: EmuDeck install function (if emudeck)
+      description: Name from `%APPDATA%\EmuDeck\backend\functions`, e.g. `PCSX2QT_install`.
+
+  - type: input
+    id: hint
+    attributes:
+      label: In-app update hint (if inapp)
+      placeholder: Help > Check for Updates
+
+  - type: textarea
+    id: version-check
+    attributes:
+      label: Version on your PC
+      description: |
+        What the installed exe reports, so Claude can check the version comparison works. Run:
+        `(Get-Item '<path to exe>').VersionInfo | Format-List FileVersion, ProductVersion`
+        and note the matching release tag.
+      render: text
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything unusual
+      description: Nightly-only builds (suggest a graceDays value), a separate launcher exe, versions that don't match tags, EmuDeck pinning an old build, etc.
+
+  - type: checkboxes
+    id: done
+    attributes:
+      label: Definition of done
+      options:
+        - label: Entry added to known-apps.json, consistent with existing entries
+        - label: Scan test covers the new path(s) and the `asset` regex matches the real asset names
+        - label: README / CHANGELOG mention it under "Recognized apps added"
+        - label: Not a Nintendo emulator (keep the repo free of those)

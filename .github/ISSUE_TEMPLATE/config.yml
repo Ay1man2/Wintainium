@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Fork it instead
+    url: https://github.com/Ay1man2/Wintainium/fork
+    about: Wintainium is shared as-is. Forks are welcome and are the place for your own changes.
+  - name: Contributing notes
+    url: https://github.com/Ay1man2/Wintainium/blob/main/CONTRIBUTING.md
+    about: How this repo is run and what to do if you fork it.

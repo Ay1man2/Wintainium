@@ -1,0 +1,155 @@
+name: Bug
+description: Something Wintainium did wrong. Written so Claude can reproduce, fix and add a test.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill in what you know. The fields with logs and JSON matter most: Claude can't run the window on your PC, so the exact output is its eyes.
+        **Before pasting:** remove your GitHub token and anything personal from paths or output.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The wrong behaviour, in a sentence or two. Include the status text shown (e.g. "site busy", "up to date", "token rejected").
+      placeholder: Clicking Update on PCSX2 downloaded the installer but the status still says "update available" after refresh.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact clicks or commands, in order. Say if it happens every time or only sometimes.
+      placeholder: |
+        1. .\Wintainium.ps1 gui
+        2. Select PCSX2, click Update
+        3. Press F5
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where you saw it. Pick all that apply; it tells Claude which code to read first.
+      multiple: true
+      options:
+        - Window (GUI)
+        - Setup wizard
+        - Scan / Locate .exe
+        - Console menu or `list`
+        - Release lookup / status / cache
+        - Update method (emudeck, inapp, installer, zip, download, page)
+        - Downloads / checksums / antivirus handling
+        - Add app (from URL)
+        - Mods / data packs (installedTag, installDir)
+        - GitHub token
+        - known-apps.json (recognized apps)
+        - Find-Sources.ps1
+        - Wintainium.exe launcher / shortcuts / taskbar
+        - Build / release zip
+        - Tests
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Release source involved
+      multiple: true
+      options:
+        - github
+        - gitlab
+        - gitea / Forgejo / Codeberg
+        - itch
+        - dolphin
+        - manual / downloadUrl template
+        - Not source-specific
+
+  - type: textarea
+    id: app-entry
+    attributes:
+      label: App list entry
+      description: The app's object from `wintainium-apps.json` (or `known-apps.json`). This is the single most useful thing for lookup and update bugs.
+      render: json
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Console output / error
+      description: Full output, not a summary. For the window, run `.\Wintainium.ps1 list` or the console menu to get text output if you can. For EmuDeck updates, include anything from `%APPDATA%\EmuDeck\logs`.
+      render: text
+
+  - type: textarea
+    id: release-info
+    attributes:
+      label: The release Wintainium was looking at
+      description: Release page URL, the tag, and the asset file names (copy them from the release page). Lets Claude build a mock for the test.
+      placeholder: |
+        https://github.com/PCSX2/pcsx2/releases/tag/v2.9.181
+        pcsx2-v2.9.181-windows-x64-Qt.7z
+        pcsx2-v2.9.181-windows-x64-Qt.7z.sha256
+
+  - type: input
+    id: version
+    attributes:
+      label: Wintainium version
+      description: Release (e.g. 0.2.0) or the commit if running from the clone (`git rev-parse --short HEAD`).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: powershell
+    attributes:
+      label: PowerShell
+      multiple: true
+      options:
+        - Windows PowerShell 5.1 (Wintainium.exe uses this)
+        - PowerShell 7
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+
+  - type: dropdown
+    id: tests
+    attributes:
+      label: Do the tests pass?
+      description: Result of `.\tests\Run-Tests.ps1` on your PC.
+      options:
+        - Didn't run them
+        - All pass
+        - Some fail (paste below)
+
+  - type: textarea
+    id: hunch
+    attributes:
+      label: Hunch (optional)
+      description: Function, suite or recent change you suspect, e.g. `Test-OlderVersion`, `Get-LatestCached`, "started after the itch.io headers change".
+
+  - type: checkboxes
+    id: done
+    attributes:
+      label: Definition of done
+      description: What the fix must include. Untick anything that doesn't apply.
+      options:
+        - label: Regression test added to the matching `tests/Test-*.ps1` suite, failing before the fix
+        - label: "`.\\tests\\Run-Tests.ps1` passes on Windows PowerShell 5.1 and PowerShell 7"
+        - label: CHANGELOG.md entry under the next version's "Fixed"
+        - label: README updated if behaviour or a message changed
