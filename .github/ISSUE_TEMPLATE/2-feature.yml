@@ -1,0 +1,133 @@
+name: Feature or change
+description: New behaviour, a new release source or update method, or a change to how something works. Scoped so Claude can build it in one pass.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The **Out of scope** and **Acceptance criteria** fields do the most work: they stop Claude from over-building and tell it when it's finished.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What you want to be able to do, and why. One or two sentences.
+      placeholder: When a release has both a .zip and an installer, I want to pick which one per app, because some emulators' installers reset settings.
+    validations:
+      required: true
+
+  - type: textarea
+    id: now
+    attributes:
+      label: How it works now
+      description: Current behaviour, or "doesn't exist".
+    validations:
+      required: true
+
+  - type: textarea
+    id: want
+    attributes:
+      label: How it should work
+      description: |
+        Concrete behaviour. Where relevant, include:
+        - what you'd click or type (button text, console command, menu key)
+        - new or changed `wintainium-apps.json` fields, with an example entry
+        - what the user sees (status text, prompts, messages)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Window (GUI)
+        - Setup wizard
+        - Scan / Locate .exe
+        - Console menu or `list`
+        - Release lookup / status / cache
+        - New release source
+        - Update method (existing or new)
+        - Downloads / checksums / antivirus handling
+        - Add app (from URL)
+        - Mods / data packs (installedTag, installDir)
+        - GitHub token
+        - known-apps.json (recognized apps)
+        - App list schema (new / changed fields)
+        - Find-Sources.ps1
+        - Wintainium.exe launcher / shortcuts / taskbar
+        - Build / release zip
+        - Tests
+        - Docs only
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: A checklist Claude can verify, ideally each one something a test can assert.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ] Existing app lists keep working with no edits (new fields are optional)
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What not to do or touch in this issue. Leave a later idea here so it doesn't creep in.
+      placeholder: |
+        - No changes to the WPF layout
+        - Don't touch Find-Sources.ps1
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Real-world example
+      description: A real app, release URL and asset names to design and test against.
+      placeholder: |
+        https://github.com/stenzek/duckstation/releases/tag/latest
+        duckstation-windows-x64-release.zip
+        duckstation-windows-x64-installer.exe
+
+  - type: textarea
+    id: questions
+    attributes:
+      label: Open questions
+      description: Decisions you haven't made. Claude should ask about these (or propose options) before building rather than guessing.
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Rough size
+      options:
+        - Small (one function or a few lines)
+        - Medium (a few functions, maybe a new field)
+        - Large (new source / method / window, should be split or planned first)
+
+  - type: checkboxes
+    id: guardrails
+    attributes:
+      label: Wintainium's standing rules
+      description: Keep these unless this issue explicitly changes one. Untick a box only if you mean to.
+      options:
+        - label: Runs on Windows PowerShell 5.1 and PowerShell 7, with no modules or installs beyond what Windows ships
+        - label: Asks before installing, unpacking or running anything; zip updates back up first
+        - label: Never restores quarantined files, allows threats or adds Defender exclusions; keeps the downloaded-from-internet mark
+        - label: Only talks to the user's release sources and GitHub's API; no telemetry
+        - label: Never downloads games, BIOS, firmware or keys
+
+  - type: checkboxes
+    id: done
+    attributes:
+      label: Definition of done
+      options:
+        - label: Tests added or updated (with mocked release servers), and `.\tests\Run-Tests.ps1` passes on 5.1 and 7
+        - label: README updated (features, field table, console commands, as relevant)
+        - label: wintainium-apps.example.json updated if the schema changed
+        - label: CHANGELOG.md entry under the next version's "Added" or "Changed"
