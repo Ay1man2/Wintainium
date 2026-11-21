@@ -7,6 +7,7 @@
 - Portable zip (`Wintainium-<version>-portable.zip`): the same files unpacked, running from any folder without installing anything.
 
 ### Security
+- A download's file name comes from the release, and GitLab, Gitea and Forgejo let a release name its files freely. A name such as `..\..\Startup\x.exe` could write outside the downloads folder (and replace a file there). Now only the plain file name is used, the file always lands in the downloads folder, and names Windows reserves (`CON`, `NUL`, `COM1`...) are refused.
 
 ## v0.2.0 - 2026-11-18
 

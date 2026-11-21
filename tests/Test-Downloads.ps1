@@ -64,6 +64,29 @@ $row2 = [pscustomobject]@{ App='S'; Latest='v2026.4.0'; Assets=@(); Def=[pscusto
 $a = Select-Asset $row2
 Check 'downloadUrl fills {version}'                ($a.browser_download_url -eq 'https://dl.example/2026.4.0/x-2026.4.0.zip' -and $a.name -eq 'x-2026.4.0.zip')
 
+# 6b. download names from the release can't leave the download folder
+$dlFull = [IO.Path]::GetFullPath($DownloadDir).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+foreach ($n in '..\..\x.exe', '../x.exe', 'C:\x.exe', '\\host\share\x.exe', 'sub/dir\x.exe') {
+    $p = Get-SafeDownloadPath $DownloadDir $n
+    Check "safe name: '$n' stays in the download folder" ($p -and $p.StartsWith($dlFull) -and (Split-Path $p -Leaf) -eq 'x.exe')
+}
+foreach ($n in '', '.', '..', '..\', 'CON', 'nul.txt', 'COM1.zip', 'lpt9', 'x.exe.', 'x.exe ', 'a:b.zip', 'a?.zip', "a`tb.zip") {
+    Check "safe name: '$n' refused" (-not (Get-SafeDownloadPath $DownloadDir $n))
+}
+Check 'safe name: normal name unchanged' ((Split-Path (Get-SafeDownloadPath $DownloadDir 'Tool-v1.2-Windows-x64.zip') -Leaf) -eq 'Tool-v1.2-Windows-x64.zip')
+$decoyDir = Join-Path $root 'escape'; New-Item -ItemType Directory $decoyDir | Out-Null
+$decoy = Join-Path $decoyDir 'Tool-v1.2-Windows-x64.zip'; Set-Content $decoy 'keep me'
+$global:started = @()
+$evil = [pscustomobject]@{ App='Evil'; Latest='v1.2'; Page='https://p'; Def=[pscustomobject]@{}
+        Assets=@([pscustomobject]@{ name='..\escape\Tool-v1.2-Windows-x64.zip'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip') }) }
+$got = Get-AssetFile $evil 6>$null
+Check 'traversal name: file lands inside the download folder' ($got -and ([IO.Path]::GetFullPath($got)).StartsWith($dlFull))
+Check 'traversal name: file at the target is not touched' ((Get-Content $decoy -Raw).Trim() -eq 'keep me')
+Check 'traversal name: nothing started'            (@($global:started).Count -eq 0)
+$evil.Assets = @([pscustomobject]@{ name='CON.zip'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip') })
+$out = Get-AssetFile $evil 6>&1 | Out-String
+Check 'reserved name: refused with a message, no download' ($out -match 'unsafe file name' -and $out -cnotmatch 'Downloading ')
+
 # 7. Expand-ToFolder flattens single top folder
 $dest = Join-Path $root 'inst'
 Expand-ToFolder $payload $dest

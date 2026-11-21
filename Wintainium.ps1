@@ -688,6 +688,20 @@ function Show-QuarantineHelp($row, [string]$name) {
     }
 }
 
+# Where a download named by the release goes: a plain file name inside $dir, or $null when the
+# name can't be used. Release data is untrusted (GitLab link names and Gitea/Forgejo asset names
+# are free text), so only the last part of the name is kept and the result must stay inside $dir.
+function Get-SafeDownloadPath([string]$dir, [string]$name) {
+    $leaf = ([string]$name -split '[\\/]')[-1]
+    if (-not $leaf -or $leaf -eq '.' -or $leaf -eq '..') { return $null }
+    if ($leaf -match '[\x00-\x1f<>:"|?*]' -or $leaf -match '[. ]$') { return $null }
+    if ($leaf -match '(?i)^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\..*)?$') { return $null }
+    $base = [IO.Path]::GetFullPath($dir).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $full = [IO.Path]::GetFullPath((Join-Path $dir $leaf))
+    if (-not $full.StartsWith($base, [StringComparison]::OrdinalIgnoreCase)) { return $null }
+    return $full
+}
+
 function Get-AssetFile($row) {
     $asset = Select-Asset $row
     if (-not $asset) {
@@ -695,9 +709,13 @@ function Get-AssetFile($row) {
         if ($row.Page) { Start-Process $row.Page }
         return $null
     }
+    $file = Get-SafeDownloadPath $DownloadDir ([string]$asset.name)
+    if (-not $file) {
+        Write-Host "  Not downloading '$($asset.name)': the release gives it an unsafe file name." -ForegroundColor Red
+        return $null
+    }
     if (-not (Test-Path -LiteralPath $DownloadDir)) { New-Item -ItemType Directory -Path $DownloadDir | Out-Null }
-    $file = Join-Path $DownloadDir $asset.name
-    $got = Save-Download ([string]$asset.browser_download_url) $file ([string]$asset.name)
+    $got = Save-Download ([string]$asset.browser_download_url) $file ([IO.Path]::GetFileName($file))
     if ($got -eq 'removed') { Show-QuarantineHelp $row ([string]$asset.name); return $null }
     if ($got -ne 'ok') { return $null }
     $check = Test-Checksum $row $asset $file
