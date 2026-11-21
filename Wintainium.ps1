@@ -44,7 +44,7 @@ param(
     [int]$CacheMinutes = 60
 )
 
-$script:AppVersion = '0.2.0'
+$script:AppVersion = '0.3.0'
 
 # The script's own folder. Windows PowerShell 5.1 leaves $PSScriptRoot empty while the
 # param() defaults are evaluated when started with -File (as the shortcut does), so resolve it here.
