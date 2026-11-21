@@ -68,6 +68,22 @@ foreach ($f in $payload + @('README.md', 'CHANGELOG.md', 'CONTRIBUTING.md')) {
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($stage, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
 
+# Wintainium.exe only runs the scripts beside it when every file it carries is byte-identical, so
+# check the zip holds exactly those bytes; otherwise portable users would get an install instead.
+$read = [IO.Compression.ZipFile]::OpenRead($zip)
+try {
+    $entries = @{}
+    foreach ($e in $read.Entries) { $entries[$e.FullName.Replace('\', '/')] = $e }
+    foreach ($f in $payload) {
+        $e = $entries["Wintainium-$ver/$($f.Replace('\', '/'))"]
+        if (-not $e) { throw "The portable zip is missing $f." }
+        $mem = New-Object IO.MemoryStream
+        $s = $e.Open(); try { $s.CopyTo($mem) } finally { $s.Dispose() }
+        $want = [IO.File]::ReadAllBytes((Join-Path $root $f))
+        if ([Convert]::ToBase64String($mem.ToArray()) -ne [Convert]::ToBase64String($want)) { throw "$f in the portable zip differs from the copy inside Wintainium.exe." }
+    }
+} finally { $read.Dispose() }
+
 foreach ($f in $exe, $zip) {
     $hash = (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLower()
     $name = Split-Path -Leaf $f

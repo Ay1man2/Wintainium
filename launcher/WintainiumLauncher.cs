@@ -3,8 +3,9 @@
 // All of Wintainium's logic stays in the PowerShell scripts, which anyone can read. This exe
 // carries a copy of them (the same files as the repo, added by build\Build-Release.ps1) and:
 //
-//   * When Wintainium.ps1 is next to it (the zip, a git clone, or the installed copy), it just
-//     starts that script in Windows PowerShell with the window ("gui").
+//   * When it sits in a Wintainium folder it can trust (the installed copy, a git clone, or an
+//     untouched portable zip), it starts the Wintainium.ps1 there in Windows PowerShell with the
+//     window ("gui"). A Wintainium.ps1 that merely sits next to it, say in Downloads, is ignored.
 //   * Otherwise (downloaded on its own), it installs itself for the current user into
 //     %LOCALAPPDATA%\Programs\Wintainium (no admin rights needed), adds an entry to
 //     Settings > Apps so it can be uninstalled, and starts the installed copy. Running a newer
@@ -89,6 +90,43 @@ static class Launcher
             return new Version(File.ReadAllText(f).Trim());
         }
         catch { return null; }
+    }
+
+    // True when every file this exe carries is in dir with exactly the same bytes: an untouched
+    // portable zip. Comparing all of them matters, because Wintainium.ps1 runs Find-Sources.ps1 and
+    // reads known-apps.json from its own folder.
+    static bool MatchesPayload(string dir)
+    {
+        List<string> names = PayloadNames();
+        if (names.Count == 0) return false;
+        Assembly asm = Assembly.GetExecutingAssembly();
+        foreach (string name in names)
+        {
+            string file = Path.Combine(dir, name.Substring(PayloadPrefix.Length).Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(file)) return false;
+            byte[] want;
+            using (Stream src = asm.GetManifestResourceStream(name))
+            using (MemoryStream mem = new MemoryStream())
+            {
+                src.CopyTo(mem);
+                want = mem.ToArray();
+            }
+            byte[] have = File.ReadAllBytes(file);
+            if (have.Length != want.Length) return false;
+            for (int i = 0; i < have.Length; i++) if (have[i] != want[i]) return false;
+        }
+        return true;
+    }
+
+    // Whether the Wintainium.ps1 next to this exe may be run. Only in the installed copy (the install
+    // folder, with its marker), a git clone, or an untouched portable zip. Anything else, like a
+    // Wintainium.ps1 a website dropped into Downloads, is not run, even with a marker file beside it.
+    static bool TrustedScriptFolder(string here)
+    {
+        if (SameFolder(here, InstallDir()) && ReadMarker(here) != null) return true;
+        string git = Path.Combine(here, ".git");
+        if (Directory.Exists(git) || File.Exists(git)) return true;
+        return MatchesPayload(here);
     }
 
     static bool SameFolder(string a, string b)
@@ -190,8 +228,8 @@ static class Launcher
     // Removes the installed copy. Your apps themselves are never touched.
     static int Uninstall()
     {
-        string dir = AppDomain.CurrentDomain.BaseDirectory;
-        if (ReadMarker(dir) == null) dir = InstallDir();
+        // Only ever the install folder: a marker file elsewhere doesn't make a folder an install.
+        string dir = InstallDir();
         if (ReadMarker(dir) == null)
         {
             Say("No installed copy of Wintainium was found in\n" + InstallDir(), MessageBoxIcon.Information);
@@ -330,8 +368,9 @@ static class Launcher
         string here = AppDomain.CurrentDomain.BaseDirectory;
         bool carriesScripts = PayloadNames().Count > 0;
 
-        // 1. Next to its scripts (zip, git clone, or the installed copy): run them.
-        if (File.Exists(Path.Combine(here, "Wintainium.ps1")))
+        // 1. In a Wintainium folder it can trust (installed copy, git clone, untouched portable zip):
+        //    run the scripts there. A launcher without scripts inside can't check, so it runs them as before.
+        if (File.Exists(Path.Combine(here, "Wintainium.ps1")) && (!carriesScripts || TrustedScriptFolder(here)))
         {
             // The installed copy refreshes its own scripts if this exe is newer than them
             // (only where this exe installed them, never in a zip folder or a git clone).
@@ -345,7 +384,8 @@ static class Launcher
             return Run(here, rest.ToArray());
         }
 
-        // 2. Downloaded on its own: install (or update) the per-user copy, then start it.
+        // 2. Downloaded on its own (or next to files it doesn't trust): install (or update) the
+        //    per-user copy from the scripts inside this exe, then start it.
         if (!carriesScripts)
         {
             Say("Wintainium.ps1 was not found next to Wintainium.exe.\n\n" +

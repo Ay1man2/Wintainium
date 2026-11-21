@@ -77,7 +77,7 @@ Windows 10 or 11. Everything it needs (Windows PowerShell 5.1 and .NET Framework
 
 Your app list, settings and token are saved in the install folder. **Updating:** Wintainium tracks itself, so when a new version is out, update it like any other app (or just run a newer `Wintainium.exe`); your list is kept. **Uninstalling:** Settings > Apps > Installed apps > Wintainium > Uninstall. It asks whether to keep your list for later, and never touches the apps it tracks.
 
-**Portable:** download **`Wintainium-<version>-portable.zip`** instead, unzip it to a folder you'll keep, and double-click `Wintainium.exe` there. It runs from that folder and installs nothing; your list and settings are saved next to it.
+**Portable:** download **`Wintainium-<version>-portable.zip`** instead, unzip it to a folder you'll keep, and double-click `Wintainium.exe` there. It runs from that folder and installs nothing; your list and settings are saved next to it. (It only runs the scripts in that folder while they're exactly as they came in the zip. If you edit them, run `Wintainium.ps1` directly or work in a git clone.)
 
 **From the source:**
 
@@ -170,7 +170,7 @@ It writes `sources-inventory.csv` to your Desktop and never changes anything.
 .\tests\Run-Tests.ps1
 ```
 
-It runs every suite under each PowerShell installed (Windows PowerShell 5.1 and PowerShell 7 on Windows). The suites mock the release servers and Windows-only parts, so they also run under PowerShell 7 on Linux and macOS. They cover status detection, every release source, the cache and its fallback when a site is down, error messages, GitHub token checks, the settings file, scan results and recognized apps, downloads, checksums, quarantine handling, add-app, remove, starting the script the way the desktop shortcut does, and the one-file `Wintainium.exe` (install, update, no downgrade, leaving zip folders and clones alone; compiled with Windows' own C# compiler, or Mono's elsewhere). The WPF window, the setup wizard, the scan window, the Settings > Apps entry and uninstall are not covered.
+It runs every suite under each PowerShell installed (Windows PowerShell 5.1 and PowerShell 7 on Windows). The suites mock the release servers and Windows-only parts, so they also run under PowerShell 7 on Linux and macOS. They cover status detection, every release source, the cache and its fallback when a site is down, error messages, GitHub token checks, the settings file, scan results and recognized apps, downloads, checksums, quarantine handling, add-app, remove, starting the script the way the desktop shortcut does, and the one-file `Wintainium.exe` (install, update, no downgrade, leaving zip folders and clones alone, ignoring a `Wintainium.ps1` dropped next to it; compiled with Windows' own C# compiler, or Mono's elsewhere). The WPF window, the setup wizard, the scan window, the Settings > Apps entry and uninstall are not covered.
 
 To build the release downloads (runs the tests, compiles `Wintainium.exe` with the scripts inside using the C# compiler built into Windows, and writes `dist\Wintainium.exe`, `dist\Wintainium-<version>-portable.zip` and a `.sha256` for each):
 

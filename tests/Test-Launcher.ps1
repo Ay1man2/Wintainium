@@ -1,5 +1,6 @@
 # The one-file Wintainium.exe: installs itself, updates without touching your files, never
-# downgrades, and leaves zip folders and git clones alone. Compiled with the C# compiler that
+# downgrades, leaves zip folders and git clones alone, and never runs a Wintainium.ps1 that just
+# happens to sit next to it (e.g. in Downloads). Compiled with the C# compiler that
 # ships with Windows (or Mono's mcs elsewhere); skipped when neither is available.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Definition)
@@ -73,12 +74,33 @@ try {
     $code = Invoke-Exe $v1
     Check 'older download does not downgrade' ($code -eq 0 -and (Get-Content (Join-Path $inst 'installed-version.txt') -Raw).Trim() -eq '0.2.1.0' -and (Get-Content (Join-Path $inst 'Wintainium.ps1') -Raw) -match '^v2')
 
-    # 4. next to its own scripts (a zip folder or a git clone): runs them, writes nothing
-    $clone = Join-Path $root 'clone'; New-Item -ItemType Directory $clone | Out-Null
-    Set-Content (Join-Path $clone 'Wintainium.ps1') 'my working copy'
-    Copy-Item $v2 (Join-Path $clone 'Wintainium.exe')
-    $code = Invoke-Exe (Join-Path $clone 'Wintainium.exe')
-    Check 'zip folder or git clone left untouched' ($code -eq 0 -and (Get-Content (Join-Path $clone 'Wintainium.ps1') -Raw).Trim() -eq 'my working copy' -and -not (Test-Path (Join-Path $clone 'installed-version.txt')))
+    # 4. Which nearby Wintainium.ps1 it trusts. With --install-only, a trusted folder means "run the
+    #    scripts there" (so nothing is installed); an untrusted one means "install my own copy". Each
+    #    case points the install folder at a fresh path to see which one happened.
+    function Test-Folder([string]$name, [scriptblock]$fill) {
+        $d = Join-Path $root $name; New-Item -ItemType Directory $d | Out-Null
+        & $fill $d
+        Copy-Item $v2 (Join-Path $d 'Wintainium.exe')
+        $probe = Join-Path $root "probe-$name"; $env:WINTAINIUM_INSTALL_DIR = $probe
+        $code = Invoke-Exe (Join-Path $d 'Wintainium.exe')
+        return [pscustomobject]@{ Dir = $d; Code = $code; Installed = (Test-Path (Join-Path $probe 'Wintainium.ps1')) }
+    }
+    # 4a. a git clone with your own edits: runs in place, writes nothing
+    $r = Test-Folder 'clone' { param($d) New-Item -ItemType Directory (Join-Path $d '.git') | Out-Null; Set-Content (Join-Path $d 'Wintainium.ps1') 'my working copy' }
+    Check 'git clone: runs its own scripts, left untouched' ($r.Code -eq 0 -and -not $r.Installed -and (Get-Content (Join-Path $r.Dir 'Wintainium.ps1') -Raw).Trim() -eq 'my working copy' -and -not (Test-Path (Join-Path $r.Dir 'installed-version.txt')))
+    # 4b. an untouched portable zip (same files as inside the exe): runs in place
+    $r = Test-Folder 'portable' { param($d) Copy-Item (Join-Path $src '*') $d -Recurse }
+    Check 'untouched portable zip: runs in place' ($r.Code -eq 0 -and -not $r.Installed)
+    # 4c. a Wintainium.ps1 dropped into Downloads: not run; the exe installs its own copy
+    $r = Test-Folder 'planted' { param($d) Set-Content (Join-Path $d 'Wintainium.ps1') 'planted' }
+    Check 'planted script ignored, own copy installed' ($r.Code -eq 0 -and $r.Installed -and (Get-Content (Join-Path $r.Dir 'Wintainium.ps1') -Raw).Trim() -eq 'planted')
+    # 4d. ... even with a planted installed-version.txt beside it
+    $r = Test-Folder 'planted-marker' { param($d) Set-Content (Join-Path $d 'Wintainium.ps1') 'planted'; Set-Content (Join-Path $d 'installed-version.txt') '99.0.0.0' }
+    Check 'planted script with a planted marker ignored' ($r.Code -eq 0 -and $r.Installed -and (Get-Content (Join-Path $r.Dir 'Wintainium.ps1') -Raw).Trim() -eq 'planted')
+    # 4e. a genuine Wintainium.ps1 next to a changed Find-Sources.ps1: not trusted either
+    $r = Test-Folder 'mixed' { param($d) Copy-Item (Join-Path $src '*') $d -Recurse; Set-Content (Join-Path $d 'Find-Sources.ps1') 'planted' }
+    Check 'genuine script beside a changed helper not trusted' ($r.Code -eq 0 -and $r.Installed)
+    $env:WINTAINIUM_INSTALL_DIR = $inst
 
     # 5. the installed copy refreshes its own scripts when its exe is newer than them
     Set-Content (Join-Path $inst 'installed-version.txt') '0.1.0.0'
