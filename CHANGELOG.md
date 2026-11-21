@@ -6,6 +6,9 @@
 - One-file download: `Wintainium.exe` carries the scripts, so you download that one file and double-click it. It installs itself to `%LOCALAPPDATA%\Programs\Wintainium` for the current user (no admin rights), adds a Settings > Apps entry to uninstall it, and starts. Running a newer `Wintainium.exe` updates the installed copy and keeps your list, settings and token; it never downgrades. An installed copy updates itself through Wintainium, using the new `Wintainium.exe` checked against its published SHA-256. Its source is in `launcher/`, and `build\Build-Release.ps1` builds it with the C# compiler that ships with Windows.
 - Portable zip (`Wintainium-<version>-portable.zip`): the same files unpacked, running from any folder without installing anything.
 
+### Changed
+- The README describes the checksum as an integrity check (it catches corrupted or altered downloads, not a compromised release). It also says that files unpacked from a zip don't keep the "downloaded from the internet" mark yet, so SmartScreen doesn't check them.
+
 ### Security
 - A download's file name comes from the release, and GitLab, Gitea and Forgejo let a release name its files freely. A name such as `..\..\Startup\x.exe` could write outside the downloads folder (and replace a file there). Now only the plain file name is used, the file always lands in the downloads folder, and names Windows reserves (`CON`, `NUL`, `COM1`...) are refused.
 - Release lookups, downloads and checksum files now only go over `https://`. Plain `http://` let anyone on the network swap a download and its checksum, and `file://` paths to another computer could leak your Windows sign-in hash. An app whose `api` or `url` in `wintainium-apps.json` starts with `http://` now shows **lookup failed** with a note to change it to `https://`.

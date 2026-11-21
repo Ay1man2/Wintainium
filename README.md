@@ -34,7 +34,7 @@ It is one PowerShell script with a dark, sortable window (or a console menu if y
   | `download` | Downloads the file and shows it in Explorer |
   | `page` | Opens the release page |
 
-- **Safe downloads:** files are checked against the SHA-256 a release publishes (`file.sha256`, `SHA256SUMS`, `checksums.txt`), and a mismatch deletes the download. Downloads keep Windows' "downloaded from the internet" mark, so SmartScreen still checks them.
+- **Careful downloads:** only over https, into your downloads folder. Each file is checked against the SHA-256 the release publishes (`file.sha256`, `SHA256SUMS`, `checksums.txt`), and a mismatch deletes the download. The downloaded file keeps Windows' "downloaded from the internet" mark.
 - **Honest about antivirus:** if Windows Security removes a download, Wintainium shows the detection name and the published hash, and offers a VirusTotal lookup and Microsoft's false-positive form. It never restores files, allows threats or adds exclusions on its own.
 - **Window:** search, an "only show updates" filter, release notes ("What's new"), Launch, Open folder, a right-click menu, double-click to update, and F5 to refresh.
 - **Add apps from a URL:** paste a GitHub, GitLab, Forgejo or itch.io link. Wintainium can track a copy you already have, or install a fresh one.
@@ -55,8 +55,8 @@ Wintainium is an **unsigned PowerShell script that downloads and runs other prog
 What it does to keep that reasonable:
 
 - **Readable:** all the logic is in two PowerShell scripts, with no obfuscation and no telemetry. It only talks to the release sources you add, plus GitHub's API. The only compiled file is `Wintainium.exe`, a short launcher that carries a copy of the scripts, installs them, and starts `Wintainium.ps1`; its source is in [`launcher/`](launcher/WintainiumLauncher.cs), and you can skip it and run the script directly.
-- **Verified downloads:** where a release publishes a SHA-256 checksum, the download is checked against it and deleted on a mismatch.
-- **SmartScreen stays in the loop:** downloads keep Windows' "downloaded from the internet" mark, so Windows still checks them before they run.
+- **Integrity check on downloads:** where a release publishes a SHA-256 checksum, the download is checked against it and deleted on a mismatch. This catches corrupted or altered downloads, not a compromised release: the checksum comes from the same release as the file. A release without a checksum is downloaded anyway, and Wintainium says so.
+- **SmartScreen for downloads:** a downloaded installer or file keeps Windows' "downloaded from the internet" mark, so Windows checks it before it runs. Files unpacked from a zip don't carry that mark yet, so SmartScreen doesn't check programs installed by unpacking.
 - **Hands off your security settings:** it never restores quarantined files, allows threats, or adds Defender exclusions. When Windows Security removes something, it explains why and leaves the decision to you.
 - **Asks first:** installers, zip installs and EmuDeck updates each ask before changing anything, and zip installs back up the app folder first.
 
