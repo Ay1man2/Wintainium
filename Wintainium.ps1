@@ -234,7 +234,27 @@ function Read-ItchPage([string]$html, [string]$page, [string]$assetPattern) {
     return [pscustomobject]@{ Tag = $tag; Date = $pick.Date; Page = $page; Assets = @(); Notes = "Latest upload: $($pick.Name)" }
 }
 
+# Release lookups, downloads and checksums only go over https. (The tests serve files from disk,
+# so they set $script:AllowFileUrls to allow local file:// paths; UNC paths are never allowed.)
+function Test-HttpsUrl([string]$url) {
+    $u = $null
+    if (-not [uri]::TryCreate($url, [UriKind]::Absolute, [ref]$u)) { return $false }
+    if ($u.Scheme -eq 'https') { return $true }
+    return [bool]($script:AllowFileUrls -and $u.Scheme -eq 'file' -and -not $u.IsUnc)
+}
+
+# The address a non-GitHub app is looked up at (GitHub's is built in), or $null.
+function Get-LookupUrl($app) {
+    switch ([string]$app.source) {
+        { $_ -in 'gitea', 'gitlab', 'dolphin' } { return [string]$app.api }
+        'itch' { return [string]$app.url }
+    }
+    return $null
+}
+
 function Get-LatestRelease($app) {
+    $lookup = Get-LookupUrl $app
+    if ($null -ne $lookup -and -not (Test-HttpsUrl $lookup)) { throw "$lookup is not an https link" }
     if ($app.source -eq 'github') {
         $base = "https://api.github.com/repos/$($app.repo)"
         if ($app.tag) {
@@ -480,6 +500,12 @@ function Show-LookupNotes($rows) {
         $left = [int]([datetime]$script:tokenExpires - (Get-Date)).TotalDays
         if ($left -le 7) { Write-Host "Your GitHub token expires in about $left day(s). $tokenHint" -ForegroundColor Yellow }
     }
+    foreach ($r in @($rows | Where-Object { $_.Status -eq 'lookup failed' })) {
+        $u = Get-LookupUrl $r.Def
+        if ($u -and -not (Test-HttpsUrl $u)) {
+            Write-Host "$($r.App): Wintainium only looks up releases over https, and its address ($u) isn't one. Change it to https:// in wintainium-apps.json." -ForegroundColor Yellow
+        }
+    }
     foreach ($r in @($rows | Where-Object { $_.Status -eq 'site busy' })) {
         Write-Host "$($r.App): $(Get-SourceSite $r.Def) didn't answer. It's usually busy for a few minutes; try Refresh later." -ForegroundColor Yellow
     }
@@ -577,6 +603,10 @@ function Select-Asset($row) {
 # Windows' "downloaded from the internet" mark so SmartScreen still checks it, and notices
 # when Windows Security removes the file the moment it lands.
 function Save-Download([string]$url, [string]$file, [string]$label) {
+    if (-not (Test-HttpsUrl $url)) {
+        Write-Host "  Not downloading $label from $url`: Wintainium only downloads over https." -ForegroundColor Red
+        return 'failed'
+    }
     Write-Host "  Downloading $label..."
     if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
     $wc = New-Object Net.WebClient
@@ -615,6 +645,7 @@ function Get-PublishedHash($row, [string]$name) {
         $sum = $all | Where-Object { $_.name -match '(?i)^(sha256sums|checksums?|sha256|hashes)(\.txt|\.sha256)?$' } | Select-Object -First 1
     }
     if (-not $sum) { return $null }
+    if (-not (Test-HttpsUrl ([string]$sum.browser_download_url))) { return @{ From = $sum.name; Error = "$($sum.name) is not an https link" } }
     try {
         $wc = New-Object Net.WebClient
         $wc.Headers['User-Agent'] = 'Wintainium'

@@ -12,6 +12,7 @@ New-Item -ItemType Directory $root | Out-Null
 if (-not $env:TEMP) { $env:TEMP = [IO.Path]::GetTempPath() }; $DownloadDir = Join-Path $root 'dl'; $InstallRoot = Join-Path $root 'apps'
 $script:sevenZip = '/nonexistent/7z.exe'; $ua = @{ 'User-Agent' = 't' }; $ghHeaders = $ua
 $viaLabel = @{ emudeck='EmuDeck'; inapp='in-app'; installer='installer'; zip='zip install'; download='download'; page='release page' }
+$script:AllowFileUrls = $true   # the fixtures below are served from disk via file:// URLs
 $fails = 0
 function Check($name, $cond) { if ($cond) { "PASS  $name" } else { "FAIL  $name"; $script:fails++ } }
 function global:Start-Process { param($FilePath) $global:started += ,$FilePath }
@@ -86,6 +87,25 @@ Check 'traversal name: nothing started'            (@($global:started).Count -eq
 $evil.Assets = @([pscustomobject]@{ name='CON.zip'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip') })
 $out = Get-AssetFile $evil 6>&1 | Out-String
 Check 'reserved name: refused with a message, no download' ($out -match 'unsafe file name' -and $out -cnotmatch 'Downloading ')
+
+# 6c. only https downloads and checksums (file:// is a test-only exception, UNC never)
+Check 'https link accepted'                        (Test-HttpsUrl 'https://example.org/x.zip')
+foreach ($u in 'http://example.org/x.zip', 'ftp://example.org/x.zip', '\\host\share\x.zip', 'file://host/share/x.zip', 'x.zip', '') {
+    Check "link refused even in tests: '$u'" (-not (Test-HttpsUrl $u))
+}
+$script:AllowFileUrls = $false
+Check 'file:// refused outside tests'              (-not (Test-HttpsUrl (U 'Tool-v1.2-Windows-x64.zip')))
+$httpRow = [pscustomobject]@{ App='Http'; Latest='v1.2'; Page='https://p'; Def=[pscustomobject]@{}
+        Assets=@([pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip'; browser_download_url='http://example.invalid/Tool-v1.2-Windows-x64.zip' }) }
+Set-Content $f 'previous download'
+$out = (Get-AssetFile $httpRow 6>&1 | ForEach-Object { "$_" }) -join "`n"   # no line wrapping
+Check 'http download refused with a message'       ($out -match 'only downloads over https' -and $out -cnotmatch 'Downloading ')
+Check 'http download: existing file not deleted'   ((Get-Content $f -Raw).Trim() -eq 'previous download')
+$p = Get-PublishedHash ([pscustomobject]@{ Assets=@([pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip.sha256'; browser_download_url='http://example.invalid/x.sha256' }) }) 'Tool-v1.2-Windows-x64.zip'
+Check 'http checksum file not fetched'             ($p.Error -match 'not an https link')
+$out = (Get-AssetFile $row 6>&1 | ForEach-Object { "$_" }) -join "`n"
+Check 'file:// download refused outside tests'     ($out -match 'only downloads over https')
+$script:AllowFileUrls = $true
 
 # 7. Expand-ToFolder flattens single top folder
 $dest = Join-Path $root 'inst'
