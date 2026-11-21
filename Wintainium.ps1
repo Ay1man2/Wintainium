@@ -243,6 +243,17 @@ function Test-HttpsUrl([string]$url) {
     return [bool]($script:AllowFileUrls -and $u.Scheme -eq 'file' -and -not $u.IsUnc)
 }
 
+# Opens a web page in the browser. Page links come from release servers, so only absolute https
+# links are opened: a UNC path, file: link or program path would otherwise be run by Windows.
+function Open-WebPage([string]$url) {
+    $u = $null
+    if ([uri]::TryCreate($url, [UriKind]::Absolute, [ref]$u) -and $u.Scheme -eq 'https') {
+        Start-Process $url
+        return
+    }
+    Write-Host "Not opening '$url': it isn't an https link." -ForegroundColor Yellow
+}
+
 # The address a non-GitHub app is looked up at (GitHub's is built in), or $null.
 function Get-LookupUrl($app) {
     switch ([string]$app.source) {
@@ -711,11 +722,11 @@ function Show-QuarantineHelp($row, [string]$name) {
     if ($p -and $p.Hash) {
         Write-Host "  Published SHA-256 ($($p.From)): $($p.Hash)"
         if ((Read-Host '  Look this hash up on VirusTotal (no upload needed)? (y/N)') -match '^y') {
-            Start-Process "https://www.virustotal.com/gui/file/$($p.Hash)"
+            Open-WebPage "https://www.virustotal.com/gui/file/$($p.Hash)"
         }
     }
     if ((Read-Host '  Open Microsoft''s form to report a false positive? (y/N)') -match '^y') {
-        Start-Process 'https://www.microsoft.com/en-us/wdsi/filesubmission'
+        Open-WebPage 'https://www.microsoft.com/en-us/wdsi/filesubmission'
     }
 }
 
@@ -737,7 +748,7 @@ function Get-AssetFile($row) {
     $asset = Select-Asset $row
     if (-not $asset) {
         Write-Host '  No matching download on that release. Opening the release page instead.' -ForegroundColor Yellow
-        if ($row.Page) { Start-Process $row.Page }
+        if ($row.Page) { Open-WebPage $row.Page }
         return $null
     }
     $file = Get-SafeDownloadPath $DownloadDir ([string]$asset.name)
@@ -855,7 +866,7 @@ function Invoke-Method($row, [string]$method, [switch]$Yes) {
             }
         }
         default {
-            if ($row.Page) { Start-Process $row.Page }
+            if ($row.Page) { Open-WebPage $row.Page }
             else { Write-Host '  No release page is set for this app. Add its repo or url to wintainium-apps.json.' -ForegroundColor Yellow }
         }
     }
@@ -2017,7 +2028,7 @@ STYLES
         Update-WizardTokenStatus
         $script:wz.BrowseInstall.Add_Click({ Select-WizardFolder $script:wz.InstallBox })
         $script:wz.BrowseDownload.Add_Click({ Select-WizardFolder $script:wz.DownloadBox })
-        $script:wz.OpenGitHub.Add_Click({ Start-Process $script:TokenPageUrl })
+        $script:wz.OpenGitHub.Add_Click({ Open-WebPage $script:TokenPageUrl })
         $script:wz.CheckToken.Add_Click({
             $script:wz.TokenResult.Text = 'Checking with GitHub...'
             $script:wz.TokenResult.Foreground = '#A6ADC8'
@@ -2209,7 +2220,7 @@ STYLES
         $script:notesWin.FindName('NSub').Text = if ($r.Released) { "Released $($r.Released)  -  you have $($r.Installed)" } else { "You have $($r.Installed)" }
         $text = (Get-NotesText $r) -replace "`r`n", "`n" -replace '\*\*', '' -replace '(?m)^#+\s*', ''
         $script:notesWin.FindName('NBody').Text = $text
-        $script:notesWin.FindName('NOpen').Add_Click({ if ($script:notesRow.Page) { Start-Process $script:notesRow.Page } })
+        $script:notesWin.FindName('NOpen').Add_Click({ if ($script:notesRow.Page) { Open-WebPage $script:notesRow.Page } })
         $script:notesWin.FindName('NClose').Add_Click({ $script:notesWin.Close() })
         [void]$script:notesWin.ShowDialog()
     }
@@ -2237,7 +2248,7 @@ STYLES
     $script:ui.BtnAll.Add_Click({ Invoke-Busy 'Updating all outdated apps...' { Update-All $script:rows; Update-Grid } })
     $script:ui.BtnPage.Add_Click({
         $r = Get-Selected
-        if ($r) { if ($r.Page) { Start-Process $r.Page } else { Write-Host "No release page is set for $($r.App)." -ForegroundColor Yellow } }
+        if ($r) { if ($r.Page) { Open-WebPage $r.Page } else { Write-Host "No release page is set for $($r.App)." -ForegroundColor Yellow } }
     })
     $script:ui.BtnFolder.Add_Click({
         $r = Get-Selected
@@ -2269,7 +2280,7 @@ STYLES
             @{ h = "What's new"; a = { $r = Get-Selected; if ($r) { Show-Notes $r } } },
             @{ h = 'Launch'; a = { $r = Get-Selected; if ($r) { Start-App $r } } },
             @{ h = '-' },
-            @{ h = 'Open release page'; a = { $r = Get-Selected; if ($r -and $r.Page) { Start-Process $r.Page } } },
+            @{ h = 'Open release page'; a = { $r = Get-Selected; if ($r -and $r.Page) { Open-WebPage $r.Page } } },
             @{ h = 'Open folder'; a = { $r = Get-Selected; if ($r) { $dir = Get-AppFolder $r; if (Test-Path -LiteralPath $dir) { Start-Process explorer.exe "`"$dir`"" } } } },
             @{ h = '-' },
             @{ h = 'Remove from list...'; a = { $r = Get-Selected; if ($r) { Invoke-Busy 'Removing...' { if (Remove-AppEntry $r) { Update-Grid } } } } })) {
@@ -2346,7 +2357,7 @@ while ($true) {
     }
     elseif ($in -match '^o\s*(\d+)$' -and [int]$Matches[1] -ge 1 -and [int]$Matches[1] -le $rows.Count) {
         $p = $rows[[int]$Matches[1] - 1].Page
-        if ($p) { Start-Process $p } else { Write-Host '  No release page for that app.' }
+        if ($p) { Open-WebPage $p } else { Write-Host '  No release page for that app.' }
     }
     elseif ($in -match '^\d+$' -and [int]$in -ge 1 -and [int]$in -le $rows.Count) { Update-App $rows[[int]$in - 1] }
     elseif ($in) { Write-Host '  Not a command.' }

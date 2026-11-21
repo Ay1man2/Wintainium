@@ -184,5 +184,22 @@ try { $out = Get-AssetFile $row 6>&1 | Out-String } catch { $err = $_ }
 Check 'late quarantine: no crash'                  (-not $err)
 Check 'late quarantine: reported as removed'       ($out -match 'Windows Security removed')
 Remove-Item function:Get-FileHash -ErrorAction SilentlyContinue
+
+# 13. release page links: only absolute https links are opened
+$global:started = @()
+Open-WebPage 'https://github.com/o/r/releases/tag/v1' 6>$null
+Check 'page link: https opened'                    (@($global:started) -contains 'https://github.com/o/r/releases/tag/v1')
+foreach ($u in 'http://example.org/', 'file:///C:/Windows/System32/calc.exe', '\\attacker\share\x.exe', 'C:\Windows\System32\calc.exe', 'calc.exe', 'javascript:alert(1)', '') {
+    $global:started = @()
+    $out = (Open-WebPage $u 6>&1 | ForEach-Object { "$_" }) -join "`n"
+    Check "page link: '$u' not opened, and said so" (@($global:started).Count -eq 0 -and $out -match "isn't an https link")
+}
+$global:started = @()
+[void](Get-AssetFile ([pscustomobject]@{ App='NoAsset'; Page='\\attacker\share\x.exe'; Assets=@(); Def=[pscustomobject]@{} }) 6>$null)
+Check 'no matching download: UNC page link not opened' (@($global:started).Count -eq 0)
+# every Start-Process in the app opens a program, a folder or Explorer, never a link it was given
+$cmds = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Start-Process' }, $true)
+$linky = @($cmds | Where-Object { $_.Extent.Text -match '\.Page\b|PageUrl|https?:|\$p\b|\$url\b' -and $_.Extent.Text -ne 'Start-Process $url' })
+Check 'no Start-Process on a page link outside Open-WebPage' ($linky.Count -eq 0)
 "`n$fails failure(s)"
 Remove-Item -Recurse -Force $root

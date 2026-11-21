@@ -9,6 +9,7 @@
 ### Security
 - A download's file name comes from the release, and GitLab, Gitea and Forgejo let a release name its files freely. A name such as `..\..\Startup\x.exe` could write outside the downloads folder (and replace a file there). Now only the plain file name is used, the file always lands in the downloads folder, and names Windows reserves (`CON`, `NUL`, `COM1`...) are refused.
 - Release lookups, downloads and checksum files now only go over `https://`. Plain `http://` let anyone on the network swap a download and its checksum, and `file://` paths to another computer could leak your Windows sign-in hash. An app whose `api` or `url` in `wintainium-apps.json` starts with `http://` now shows **lookup failed** with a note to change it to `https://`.
+- **Release page** and the other links only open when they are `https://` web addresses. The page link comes from the release server, and a hostile GitLab or Gitea server could have sent a network path or program instead, which Windows would have opened.
 
 ## v0.2.0 - 2026-11-18
 
