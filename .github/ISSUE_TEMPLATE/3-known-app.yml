@@ -12,7 +12,7 @@ body:
     id: name
     attributes:
       label: App name
-      placeholder: Ryujinx
+      placeholder: Vita3K
     validations:
       required: true
 
@@ -121,4 +121,4 @@ body:
         - label: Entry added to known-apps.json, consistent with existing entries
         - label: Scan test covers the new path(s) and the `asset` regex matches the real asset names
         - label: README / CHANGELOG mention it under "Recognized apps added"
-        - label: Not a Nintendo emulator (keep the repo free of those)
+        - label: Not a Switch emulator or Switch-related (keep the repo free of those)
