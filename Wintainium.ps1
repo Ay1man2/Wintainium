@@ -2139,7 +2139,8 @@ STYLES
         if ($prompt -match '\((y/N|Y/n)') {
             $d.Prompt.Text = ($prompt -replace '\s*\((y/N|Y/n)[^)]*\)\s*:?\s*$', '').Trim()
             $d.Input.Visibility = 'Collapsed'
-            $d.B1.Content = 'Yes'; $d.B1.Add_Click({ $script:dlgResult = 'y'; $script:dlg.Close() })
+            $script:dlgResult = 'n'   # closing the box with X (or Alt+F4) answers No, never Yes
+            $d.B1.Content = 'Yes';$d.B1.Add_Click({ $script:dlgResult = 'y'; $script:dlg.Close() })
             $d.B2.Content = 'No';  $d.B2.IsCancel = $true; $d.B2.Add_Click({ $script:dlgResult = 'n'; $script:dlg.Close() })
             if ($prompt -match 'q = stop') {
                 $d.B3.Content = 'Stop'; $d.B3.Add_Click({ $script:dlgResult = 'q'; $script:dlg.Close() })
