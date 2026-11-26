@@ -71,8 +71,11 @@ foreach ($n in '..\..\x.exe', '../x.exe', 'C:\x.exe', '\\host\share\x.exe', 'sub
     $p = Get-SafeDownloadPath $DownloadDir $n
     Check "safe name: '$n' stays in the download folder" ($p -and $p.StartsWith($dlFull) -and (Split-Path $p -Leaf) -eq 'x.exe')
 }
-foreach ($n in '', '.', '..', '..\', 'CON', 'nul.txt', 'COM1.zip', 'lpt9', 'x.exe.', 'x.exe ', 'a:b.zip', 'a?.zip', "a`tb.zip") {
+foreach ($n in '', '.', '..', '..\', 'CON', 'nul.txt', 'COM1.zip', 'lpt9', 'CONIN$', 'conout$.txt', 'NUL .txt', "COM$([char]0xB9).zip", "LPT$([char]0xB3)", 'x.exe.', 'x.exe ', 'a:b.zip', 'a?.zip', "a`tb.zip") {
     Check "safe name: '$n' refused" (-not (Get-SafeDownloadPath $DownloadDir $n))
+}
+foreach ($n in 'CONSOLE.zip', 'com10.exe', 'nul-tool.zip', 'AUXtool.7z') {
+    Check "safe name: '$n' allowed" ((Split-Path (Get-SafeDownloadPath $DownloadDir $n) -Leaf) -eq $n)
 }
 Check 'safe name: normal name unchanged' ((Split-Path (Get-SafeDownloadPath $DownloadDir 'Tool-v1.2-Windows-x64.zip') -Leaf) -eq 'Tool-v1.2-Windows-x64.zip')
 $decoyDir = Join-Path $root 'escape'; New-Item -ItemType Directory $decoyDir | Out-Null
@@ -189,6 +192,9 @@ Remove-Item function:Get-FileHash -ErrorAction SilentlyContinue
 $global:started = @()
 Open-WebPage 'https://github.com/o/r/releases/tag/v1' 6>$null
 Check 'page link: https opened'                    (@($global:started) -contains 'https://github.com/o/r/releases/tag/v1')
+$global:started = @()
+Open-WebPage 'https://example.org/a b' 6>$null
+Check 'page link: opened in its checked, parsed form' (@($global:started) -contains 'https://example.org/a%20b')
 foreach ($u in 'http://example.org/', 'file:///C:/Windows/System32/calc.exe', '\\attacker\share\x.exe', 'C:\Windows\System32\calc.exe', 'calc.exe', 'javascript:alert(1)', '') {
     $global:started = @()
     $out = (Open-WebPage $u 6>&1 | ForEach-Object { "$_" }) -join "`n"
@@ -199,7 +205,7 @@ $global:started = @()
 Check 'no matching download: UNC page link not opened' (@($global:started).Count -eq 0)
 # every Start-Process in the app opens a program, a folder or Explorer, never a link it was given
 $cmds = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Start-Process' }, $true)
-$linky = @($cmds | Where-Object { $_.Extent.Text -match '\.Page\b|PageUrl|https?:|\$p\b|\$url\b' -and $_.Extent.Text -ne 'Start-Process $url' })
+$linky = @($cmds | Where-Object { $_.Extent.Text -match '\.Page\b|PageUrl|https?:|\$p\b|\$url\b' -and $_.Extent.Text -ne 'Start-Process $u.AbsoluteUri' })
 Check 'no Start-Process on a page link outside Open-WebPage' ($linky.Count -eq 0)
 "`n$fails failure(s)"
 Remove-Item -Recurse -Force $root
