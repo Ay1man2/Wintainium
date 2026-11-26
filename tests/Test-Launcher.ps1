@@ -86,7 +86,7 @@ try {
         return [pscustomobject]@{ Dir = $d; Code = $code; Installed = (Test-Path (Join-Path $probe 'Wintainium.ps1')) }
     }
     # 4a. a git clone with your own edits: runs in place, writes nothing
-    $r = Test-Folder 'clone' { param($d) New-Item -ItemType Directory (Join-Path $d '.git') | Out-Null; Set-Content (Join-Path $d 'Wintainium.ps1') 'my working copy' }
+    $r = Test-Folder 'clone' { param($d) New-Item -ItemType Directory (Join-Path $d '.git') | Out-Null; Set-Content (Join-Path $d '.git/HEAD') 'ref: refs/heads/dev'; Set-Content (Join-Path $d 'Wintainium.ps1') 'my working copy' }
     Check 'git clone: runs its own scripts, left untouched' ($r.Code -eq 0 -and -not $r.Installed -and (Get-Content (Join-Path $r.Dir 'Wintainium.ps1') -Raw).Trim() -eq 'my working copy' -and -not (Test-Path (Join-Path $r.Dir 'installed-version.txt')))
     # 4b. an untouched portable zip (same files as inside the exe): runs in place
     $r = Test-Folder 'portable' { param($d) Copy-Item (Join-Path $src '*') $d -Recurse }
@@ -97,6 +97,16 @@ try {
     # 4d. ... even with a planted installed-version.txt beside it
     $r = Test-Folder 'planted-marker' { param($d) Set-Content (Join-Path $d 'Wintainium.ps1') 'planted'; Set-Content (Join-Path $d 'installed-version.txt') '99.0.0.0' }
     Check 'planted script with a planted marker ignored' ($r.Code -eq 0 -and $r.Installed -and (Get-Content (Join-Path $r.Dir 'Wintainium.ps1') -Raw).Trim() -eq 'planted')
+    # 4d2. a git worktree (.git file pointing at a real git folder): runs in place
+    $gd = Join-Path $root 'real-gitdir'; New-Item -ItemType Directory $gd | Out-Null; Set-Content (Join-Path $gd 'HEAD') 'ref: refs/heads/dev'
+    $r = Test-Folder 'worktree' { param($d) Set-Content (Join-Path $d '.git') "gitdir: $gd"; Set-Content (Join-Path $d 'Wintainium.ps1') 'my worktree copy' }
+    Check 'git worktree: runs its own scripts' ($r.Code -eq 0 -and -not $r.Installed)
+    # 4d3. a downloaded file named .git beside a planted script: not a clone
+    $r = Test-Folder 'planted-gitfile' { param($d) Set-Content (Join-Path $d '.git') 'anything'; Set-Content (Join-Path $d 'Wintainium.ps1') 'planted' }
+    Check 'planted .git file ignored, own copy installed' ($r.Code -eq 0 -and $r.Installed)
+    # 4d4. ... even one that says gitdir: but points nowhere real
+    $r = Test-Folder 'planted-gitdir' { param($d) Set-Content (Join-Path $d '.git') 'gitdir: C:\nowhere\.git'; Set-Content (Join-Path $d 'Wintainium.ps1') 'planted' }
+    Check 'planted .git file with a fake gitdir ignored' ($r.Code -eq 0 -and $r.Installed)
     # 4e. a genuine Wintainium.ps1 next to a changed Find-Sources.ps1: not trusted either
     $r = Test-Folder 'mixed' { param($d) Copy-Item (Join-Path $src '*') $d -Recurse; Set-Content (Join-Path $d 'Find-Sources.ps1') 'planted' }
     Check 'genuine script beside a changed helper not trusted' ($r.Code -eq 0 -and $r.Installed)

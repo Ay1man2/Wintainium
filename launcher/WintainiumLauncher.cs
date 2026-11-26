@@ -124,9 +124,34 @@ static class Launcher
     static bool TrustedScriptFolder(string here)
     {
         if (SameFolder(here, InstallDir()) && ReadMarker(here) != null) return true;
-        string git = Path.Combine(here, ".git");
-        if (Directory.Exists(git) || File.Exists(git)) return true;
+        if (IsGitCheckout(here)) return true;
         return MatchesPayload(here);
+    }
+
+    // A git clone has a .git folder. A worktree or submodule has a .git file that says
+    // "gitdir: <path>" instead, and that path must be a real git folder. A downloaded file named
+    // ".git" can't make a folder look like a clone.
+    static bool IsGitCheckout(string here)
+    {
+        string git = Path.Combine(here, ".git");
+        if (Directory.Exists(git)) return LooksLikeGitDir(git);
+        if (!File.Exists(git)) return false;
+        try
+        {
+            if (new FileInfo(git).Length > 4096) return false;
+            string text = File.ReadAllText(git).Trim();
+            if (!text.StartsWith("gitdir:", StringComparison.Ordinal)) return false;
+            string target = text.Substring("gitdir:".Length).Trim();
+            if (target.Length == 0) return false;
+            if (!Path.IsPathRooted(target)) target = Path.Combine(here, target);
+            return LooksLikeGitDir(target);
+        }
+        catch { return false; }
+    }
+
+    static bool LooksLikeGitDir(string dir)
+    {
+        return Directory.Exists(dir) && File.Exists(Path.Combine(dir, "HEAD"));
     }
 
     static bool SameFolder(string a, string b)
