@@ -248,7 +248,8 @@ function Test-HttpsUrl([string]$url) {
 function Open-WebPage([string]$url) {
     $u = $null
     if ([uri]::TryCreate($url, [UriKind]::Absolute, [ref]$u) -and $u.Scheme -eq 'https') {
-        Start-Process $url
+        # Open the parsed form, so Windows gets exactly the https link that was checked.
+        Start-Process $u.AbsoluteUri
         return
     }
     Write-Host "Not opening '$url': it isn't an https link." -ForegroundColor Yellow
@@ -737,7 +738,8 @@ function Get-SafeDownloadPath([string]$dir, [string]$name) {
     $leaf = ([string]$name -split '[\\/]')[-1]
     if (-not $leaf -or $leaf -eq '.' -or $leaf -eq '..') { return $null }
     if ($leaf -match '[\x00-\x1f<>:"|?*]' -or $leaf -match '[. ]$') { return $null }
-    if ($leaf -match '(?i)^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\..*)?$') { return $null }
+    # Windows device names, also with an extension or spaces before it (COM\u00B9-\u00B3 and LPT\u00B9-\u00B3 count too).
+    if ($leaf -match '(?i)^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|(COM|LPT)[0-9\u00B9\u00B2\u00B3])\s*(\..*)?$') { return $null }
     $base = [IO.Path]::GetFullPath($dir).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
     $full = [IO.Path]::GetFullPath((Join-Path $dir $leaf))
     if (-not $full.StartsWith($base, [StringComparison]::OrdinalIgnoreCase)) { return $null }
