@@ -71,39 +71,39 @@ How to use it:
 
 ## 5. Updating an app
 
-- [ ] **U-01** Several methods: choose which (Enter = first, x = cancel). Source: `Update-App`. Proof:
-- [ ] **U-02** Update all: each outdated app asks Yes / No / Stop, uses its first method, skips the confirmations inside. Source: `Update-All`. Proof:
-- [ ] **U-03** "Nothing to update." when no app is outdated. Source: `Update-All`. Proof:
+- [x] **U-01** Several methods: choose which (Enter = first, x = cancel). Source: `Update-App`. Proof: `InstallTests.Update_app_asks_which_method_when_there_are_several`
+- [x] **U-02** Update all: each outdated app asks Yes / No / Stop, uses its first method, skips the confirmations inside. Source: `Update-All`. Proof: `InstallTests.Update_all_asks_each_outdated_app_and_stops_when_asked`
+- [x] **U-03** "Nothing to update." when no app is outdated. Source: `Update-All`. Proof: `InstallTests.Update_all_asks_each_outdated_app_and_stops_when_asked`
 - [ ] **U-04** Updating an app that isn't UPDATE asks "Run its update anyway?". Source: `Start-SelectedUpdate`. Proof:
-- [ ] **U-05** `emudeck`: refuses while the app runs; explains and asks; runs EmuDeck's install function; shows seconds and MB in EmuDeck's temp folder; reports EmuDeck errors; says whether the exe changed (with the log folder if not). Source: `Invoke-EmuDeckInstall`. Proof:
-- [ ] **U-06** `emudeck` without `emudeckFn` or without EmuDeck's backend: opens EmuDeck with instructions, or says where it wasn't found. Source: `Open-EmuDeck`. Proof:
-- [ ] **U-07** `inapp`: starts the program (or `launch`) in its own folder, shows `hint`; "Not found" when missing. Source: `Invoke-Method`. Proof:
-- [ ] **U-08** `installer`: downloads, then asks "Run the installer now?". Source: `Invoke-Method`. Proof:
-- [ ] **U-09** `zip`: downloads, backs up, unpacks; saves installedTag for mods. Source: `Invoke-Method`, `Install-Zip`. Proof:
-- [ ] **U-10** `download`: downloads and selects the file in Explorer. Source: `Invoke-Method`. Proof:
-- [ ] **U-11** `page`: opens the release page, or says none is set. Source: `Invoke-Method`. Proof:
+- [x] **U-05** `emudeck`: refuses while the app runs; explains and asks; runs EmuDeck's install function; shows seconds and MB in EmuDeck's temp folder; reports EmuDeck errors; says whether the exe changed (with the log folder if not). Source: `Invoke-EmuDeckInstall`. Proof: `InstallTests.EmuDeck_install_runs_its_function_and_reports_the_new_exe`, `EmuDeck_errors_and_an_unchanged_exe_are_reported`, `EmuDeck_refused_while_the_emulator_runs` (real EmuDeck run: PR 8 side-by-side)
+- [x] **U-06** `emudeck` without `emudeckFn` or without EmuDeck's backend: opens EmuDeck with instructions, or says where it wasn't found. Source: `Open-EmuDeck`. Proof: `InstallTests.EmuDeck_without_its_backend_opens_EmuDeck_with_instructions`
+- [x] **U-07** `inapp`: starts the program (or `launch`) in its own folder, shows `hint`; "Not found" when missing. Source: `Invoke-Method`. Proof: `InstallTests.Inapp_starts_the_program_or_its_launcher_and_shows_the_hint`
+- [x] **U-08** `installer`: downloads, then asks "Run the installer now?". Source: `Invoke-Method`. Proof: `InstallTests.Installer_download_and_page_methods`
+- [x] **U-09** `zip`: downloads, backs up, unpacks; saves installedTag for mods. Source: `Invoke-Method`, `Install-Zip`. Proof: `InstallTests.Mod_update`, `Zip_update_backs_up_says_how_to_roll_back_and_shows_the_hint`
+- [x] **U-10** `download`: downloads and selects the file in Explorer. Source: `Invoke-Method`. Proof: `InstallTests.Installer_download_and_page_methods`
+- [x] **U-11** `page`: opens the release page, or says none is set. Source: `Invoke-Method`. Proof: `InstallTests.Installer_download_and_page_methods`
 
 ## 6. Downloads, checksums and Windows Security
 
-- [ ] **W-01** Asset choice: `downloadUrl` with `{version}` first; else assets matching `asset`; one = used, several = numbered choice (Enter = cancel); none = release page opened. Source: `Select-Asset`, `Get-AssetFile`. Proof:
-- [ ] **W-02** Safe file name: last part of the name only; refuses empty, `.`/`..`, control and `<>:"|?*` characters, trailing dot/space, device names (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM/LPT 0-9 and superscript 1-3, with or without extension); result must stay in the download folder. Source: `Get-SafeDownloadPath`. Proof:
-- [ ] **W-03** Downloads only over https; message and no file touched otherwise. Source: `Save-Download`, `Test-HttpsUrl`. Proof:
+- [x] **W-01** Asset choice: `downloadUrl` with `{version}` first; else assets matching `asset`; one = used, several = numbered choice (Enter = cancel); none = release page opened. Source: `Select-Asset`, `Get-AssetFile`. Proof: `DownloadTests.DownloadUrl_fills_version`, `Asset_pattern_picks_one_file_without_asking`, `Several_files_are_a_numbered_choice_and_Enter_cancels`, `No_matching_download_opens_the_release_page`
+- [x] **W-02** Safe file name: last part of the name only; refuses empty, `.`/`..`, control and `<>:"|?*` characters, trailing dot/space, device names (CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM/LPT 0-9 and superscript 1-3, with or without extension); result must stay in the download folder. Source: `Get-SafeDownloadPath`. Proof: `DownloadTests.Safe_name_*`, `Traversal_name_lands_inside`, `Reserved_name_refused`
+- [x] **W-03** Downloads only over https; message and no file touched otherwise. Source: `Save-Download`, `Test-HttpsUrl`. Proof: `DownloadTests.Non_https_download_refused`
 - [ ] **W-04** Progress line with MB and seconds in the status bar; window stays responsive. Source: `Save-Download`. Proof:
-- [ ] **W-05** Download folder created when missing; an older file of the same name replaced. Source: `Get-AssetFile`, `Save-Download`. Proof:
-- [ ] **W-06** Downloaded file gets the "from the internet" mark (Zone.Identifier, ZoneId=3, HostUrl). Source: `Save-Download`. Proof:
-- [ ] **W-07** File removed by Windows Security right after download or during the checksum is detected and reported. Source: `Save-Download`, `Test-Checksum`. Proof:
-- [ ] **W-08** Checksum found as `<file>.sha256`, else `SHA256SUMS` / `checksums.txt` / `sha256.txt` / `hashes` style lists; must be https. Source: `Get-PublishedHash`. Proof:
-- [ ] **W-09** Match = green "SHA-256 matches"; mismatch = file deleted, expected/got shown; locked file = not used. Source: `Test-Checksum`. Proof:
-- [ ] **W-10** Windows Security help: detection name and ID when readable (note for generic ML detections), warning against "Allow on device" and exclusions, published SHA-256, offer to look it up on VirusTotal, offer to open Microsoft's false-positive form. Never restores, allows or excludes anything. Source: `Show-QuarantineHelp`. Proof:
-- [ ] **W-11** Release-page links open only when absolute https; otherwise "Not opening ...". Source: `Open-WebPage`. Proof:
+- [x] **W-05** Download folder created when missing; an older file of the same name replaced. Source: `Get-AssetFile`, `Save-Download`. Proof: `DownloadTests.Download_lands_the_file` (folder created, old file replaced in `Downloader.SaveAsync`)
+- [x] **W-06** Downloaded file gets the "from the internet" mark (Zone.Identifier, ZoneId=3, HostUrl). Source: `Save-Download`. Proof: `DownloadTests.Download_is_marked`, `Zone_identifier_round_trips_on_NTFS` (Windows)
+- [x] **W-07** File removed by Windows Security right after download or during the checksum is detected and reported. Source: `Save-Download`, `Test-Checksum`. Proof: `DownloadTests.Quarantine_help`, `Late_quarantine_reported`
+- [x] **W-08** Checksum found as `<file>.sha256`, else `SHA256SUMS` / `checksums.txt` / `sha256.txt` / `hashes` style lists; must be https. Source: `Get-PublishedHash`. Proof: `DownloadTests.Per_file_sha256_verified`, `Sums_list_verified`, `Http_checksum_not_fetched`
+- [x] **W-09** Match = green "SHA-256 matches"; mismatch = file deleted, expected/got shown; locked file = not used. Source: `Test-Checksum`. Proof: `DownloadTests.Bad_checksum_rejected_and_deleted`, `Per_file_sha256_verified`
+- [x] **W-10** Windows Security help: detection name and ID when readable (note for generic ML detections), warning against "Allow on device" and exclusions, published SHA-256, offer to look it up on VirusTotal, offer to open Microsoft's false-positive form. Never restores, allows or excludes anything. Source: `Show-QuarantineHelp`. Proof: `DownloadTests.Quarantine_help`, `Quarantine_without_admin_rights_says_so`
+- [x] **W-11** Release-page links open only when absolute https; otherwise "Not opening ...". Source: `Open-WebPage`. Proof: `DownloadTests.Page_link_opened_parsed`, `Page_link_refused`
 
 ## 7. Archives, zip installs and mods
 
-- [ ] **Z-01** `.zip` always unpackable; `.7z` when EmuDeck's 7z.exe exists (7z.exe also used for zips when present); other types saved and shown in Explorer. Source: `Test-Archive`, `Expand-ToFolder`, `Install-Zip`. Proof:
-- [ ] **Z-02** A single top-level folder in the archive is flattened. Source: `Expand-ToFolder`. Proof:
-- [ ] **Z-03** Zip update: refuses while the program runs; shows and asks about the backup `<folder>.backup-yyyyMMdd-HHmm`; copies, unpacks over, says how to roll back, shows `hint`. Source: `Install-Zip`. Proof:
-- [ ] **Z-04** App folder = `installDir` when set, else the exe's folder. Source: `Get-AppFolder`. Proof:
-- [ ] **Z-05** installedTag saved after a successful mod update; unchanged when cancelled. Source: `Save-InstalledTag`. Proof:
+- [x] **Z-01** `.zip` always unpackable; `.7z` when EmuDeck's 7z.exe exists (7z.exe also used for zips when present); other types saved and shown in Explorer. Source: `Test-Archive`, `Expand-ToFolder`, `Install-Zip`. Proof: `InstallTests.Cannot_unpack_other_types_or_7z_without_EmuDeck`, `Seven_zip_is_used_when_EmuDeck_has_it`, `Other_file_types_are_saved_and_shown`
+- [x] **Z-02** A single top-level folder in the archive is flattened. Source: `Expand-ToFolder`. Proof: `InstallTests.Unzip_flattens_single_top_folder`
+- [x] **Z-03** Zip update: refuses while the program runs; shows and asks about the backup `<folder>.backup-yyyyMMdd-HHmm`; copies, unpacks over, says how to roll back, shows `hint`. Source: `Install-Zip`. Proof: `InstallTests.Zip_update_refused_while_the_program_runs`, `Zip_update_cancelled_changes_nothing`, `Zip_update_backs_up_says_how_to_roll_back_and_shows_the_hint`
+- [x] **Z-04** App folder = `installDir` when set, else the exe's folder. Source: `Get-AppFolder`. Proof: `InstallTests.App_folder_is_installDir`
+- [x] **Z-05** installedTag saved after a successful mod update; unchanged when cancelled. Source: `Save-InstalledTag`. Proof: `InstallTests.Mod_update`, `Mod_update_cancelled`
 
 ## 8. Add app
 
@@ -263,18 +263,18 @@ who know what they're doing.
 The only places where v0.4.0 may behave differently from v0.3.0. Each needs its own test and a
 CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 
-- [ ] **X-01** Archive entries must stay inside the target folder (zip-slip refused). (#2) Proof:
-- [ ] **X-02** Unpacked programs and scripts keep the download mark. (#2) Proof:
-- [ ] **X-03** Checksum file present but unusable = download refused, not "not verified". Wording "integrity check". (#4) Proof:
+- [x] **X-01** Archive entries must stay inside the target folder (zip-slip refused). (#2) Proof: `InstallTests.Zip_slip_refused`
+- [x] **X-02** Unpacked programs and scripts keep the download mark. (#2) Proof: `InstallTests.Unpacked_programs_keep_the_mark`
+- [x] **X-03** Checksum file present but unusable = download refused, not "not verified". Wording "integrity check". (#4) Proof: `DownloadTests.Unusable_checksum_refuses`
 - [x] **X-04** `GITHUB_TOKEN` used only if it passes the no-scope check. (#6) Proof: `TokenTests.GITHUB_TOKEN_is_used_only_when_it_has_no_scopes`
 - [ ] **X-05** Usernames/passwords removed from any URL shown or saved. (#7) Proof:
-- [ ] **X-06** `emudeckFn` must match `^[A-Za-z0-9]+_install$`. (#8) Proof:
+- [x] **X-06** `emudeckFn` must match `^[A-Za-z0-9]+_install$`. (#8) Proof: `InstallTests.EmuDeck_function_names_are_checked`, `Bad_EmuDeck_function_not_run`
 - [ ] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof:
-- [ ] **X-08** Zip updates unpack into the right folder when the exe sits in a subfolder. (correctness 1) Proof:
+- [x] **X-08** Zip updates unpack into the right folder when the exe sits in a subfolder. (correctness 1) Proof: `InstallTests.Exe_in_subfolder_updates_the_right_folder`
 - [x] **X-09** Major-version jumps compared by number, not by date. (correctness 2) Proof: `VersionCompareTests.Older_by_number`, listed in `StatusGoldenTests.Deviations`
 - [x] **X-10** Exact version match instead of substring (12.1.0 no longer "contains" 2.1). (correctness 3) Proof: `VersionCompareTests.Same_release_needs_the_whole_number`, listed in `StatusGoldenTests.Deviations`
 - [x] **X-11** Atomic writes for every data file; a broken app list is restored from `.bak` with a clear message instead of stopping startup. (correctness 4) Proof: `AppListTests.Saves_utf8_without_bom_and_keeps_a_backup`, `Broken_list_is_restored_from_the_backup`, `Broken_list_without_backup_is_reported_and_left_alone`
-- [ ] **X-12** Old backups pruned; files removed in a new zip release don't linger. (correctness 5) Proof:
+- [ ] **X-12** Old backups pruned; files removed in a new zip release don't linger. (correctness 5) Proof: pruning in `InstallTests.Old_backups_pruned` (PR 6). Lingering files: open question, because deleting files an archive no longer has could remove saves or settings kept in the app folder.
 - [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof:
 - [ ] **X-14** Closing any yes/no dialog with X or Alt+F4 = No (already true in v0.3.0's window; now true everywhere). (correctness 7) Proof:
 - [ ] **X-15** Wizard welcome text describes the exe instead of "an unsigned PowerShell script ... Wintainium.ps1". Proof:
@@ -308,30 +308,30 @@ longer applies says why instead of naming a test.
 
 ### Test-Downloads.ps1
 
-- [ ] download via progress loop lands the file ->
-- [ ] per-file .sha256 verified ->
-- [ ] bad checksum rejected ->
-- [ ] bad download deleted ->
-- [ ] SHA256SUMS list verified ->
-- [ ] no checksum: download kept + noted ->
-- [ ] missing file reported as failed download ->
-- [ ] downloadUrl fills {version} ->
-- [ ] safe name: '<name>' stays in the download folder (each case) ->
-- [ ] safe name: '<name>' refused (each case) ->
-- [ ] safe name: '<name>' allowed (each case) ->
-- [ ] safe name: normal name unchanged ->
-- [ ] traversal name: file lands inside the download folder ->
-- [ ] traversal name: file at the target is not touched ->
-- [ ] traversal name: nothing started ->
-- [ ] reserved name: refused with a message, no download ->
+- [x] download via progress loop lands the file -> `DownloadTests.Download_lands_the_file`
+- [x] per-file .sha256 verified -> `DownloadTests.Per_file_sha256_verified`
+- [x] bad checksum rejected -> `DownloadTests.Bad_checksum_rejected_and_deleted`
+- [x] bad download deleted -> `DownloadTests.Bad_checksum_rejected_and_deleted`
+- [x] SHA256SUMS list verified -> `DownloadTests.Sums_list_verified`
+- [x] no checksum: download kept + noted -> `DownloadTests.No_checksum_kept_and_noted`
+- [x] missing file reported as failed download -> `DownloadTests.Missing_file_failed`
+- [x] downloadUrl fills {version} -> `DownloadTests.DownloadUrl_fills_version`
+- [x] safe name: '<name>' stays in the download folder (each case) -> `DownloadTests.Safe_name_stays_inside`
+- [x] safe name: '<name>' refused (each case) -> `DownloadTests.Safe_name_refused`
+- [x] safe name: '<name>' allowed (each case) -> `DownloadTests.Safe_name_allowed`
+- [x] safe name: normal name unchanged -> `DownloadTests.Safe_name_allowed`
+- [x] traversal name: file lands inside the download folder -> `DownloadTests.Traversal_name_lands_inside`
+- [x] traversal name: file at the target is not touched -> `DownloadTests.Traversal_name_lands_inside`
+- [x] traversal name: nothing started -> `DownloadTests.Traversal_name_lands_inside`
+- [x] reserved name: refused with a message, no download -> `DownloadTests.Reserved_name_refused`
 - [x] https link accepted -> `LinksTests.Https_link_accepted`
 - [x] link refused even in tests: '<url>' (each case) -> `LinksTests.Link_refused`
 - [x] file:// refused outside tests -> `LinksTests.Link_refused (file:///C:/... case)`
-- [ ] http download refused with a message ->
-- [ ] http download: existing file not deleted ->
-- [ ] http checksum file not fetched ->
-- [ ] file:// download refused outside tests ->
-- [ ] unzip flattens the single top folder ->
+- [x] http download refused with a message -> `DownloadTests.Non_https_download_refused`
+- [x] http download: existing file not deleted -> `DownloadTests.Non_https_download_refused`
+- [x] http checksum file not fetched -> `DownloadTests.Http_checksum_not_fetched`
+- [x] file:// download refused outside tests -> `DownloadTests.Non_https_download_refused`
+- [x] unzip flattens the single top folder -> `InstallTests.Unzip_flattens_single_top_folder`
 - [ ] Add-App: Forgejo URL -> gitea api ->
 - [ ] Add-App: installed into InstallRoot\name ->
 - [ ] Add-App: AppImage filtered out (single choice, no prompt) ->
@@ -339,21 +339,21 @@ longer applies says why instead of naming a test.
 - [ ] Add-App: version wildcarded in asset pattern ->
 - [ ] Add-App: update method zip ->
 - [ ] Add-App parses <url> (each case) ->
-- [ ] quarantine: names the detection ->
-- [ ] quarantine: warns against Allow on device ->
-- [ ] quarantine: shows published SHA-256 ->
-- [ ] quarantine: VirusTotal opened for that hash ->
-- [ ] quarantine: Microsoft form opened ->
-- [ ] quarantine: nothing returned to install ->
+- [x] quarantine: names the detection -> `DownloadTests.Quarantine_help`
+- [x] quarantine: warns against Allow on device -> `DownloadTests.Quarantine_help`
+- [x] quarantine: shows published SHA-256 -> `DownloadTests.Quarantine_help`
+- [x] quarantine: VirusTotal opened for that hash -> `DownloadTests.Quarantine_help`
+- [x] quarantine: Microsoft form opened -> `DownloadTests.Quarantine_help`
+- [x] quarantine: nothing returned to install -> `DownloadTests.Quarantine_help`
 - [x] remove: only that app removed -> `AppListTests.Remove_takes_only_that_app (list part; the dialog is covered in PR 9)`
 - [ ] remove: answering No keeps it ->
-- [ ] late quarantine: no crash ->
-- [ ] late quarantine: reported as removed ->
-- [ ] page link: https opened ->
-- [ ] page link: opened in its checked, parsed form ->
-- [ ] page link: '<url>' not opened, and said so (each case) ->
-- [ ] no matching download: UNC page link not opened ->
-- [ ] no Start-Process on a page link outside Open-WebPage -> replaced by: only the link opener can start a URL (architecture test)
+- [x] late quarantine: no crash -> `DownloadTests.Late_quarantine_reported`
+- [x] late quarantine: reported as removed -> `DownloadTests.Late_quarantine_reported`
+- [x] page link: https opened -> `DownloadTests.Page_link_opened_parsed`
+- [x] page link: opened in its checked, parsed form -> `DownloadTests.Page_link_opened_parsed`
+- [x] page link: '<url>' not opened, and said so (each case) -> `DownloadTests.Page_link_refused`
+- [x] no matching download: UNC page link not opened -> `DownloadTests.Unc_page_not_opened`
+- [x] no Start-Process on a page link outside Open-WebPage -> replaced by `DownloadTests.Only_WebPage_opens_links` (only WebPage.cs calls OpenUrl)
 
 ### Test-Itch.ps1
 
@@ -433,14 +433,14 @@ longer applies says why instead of naming a test.
 - [ ] mod: same release is up to date ->
 - [ ] mod: Installed column shows the release tag ->
 - [ ] mod: new release flagged UPDATE ->
-- [ ] mod update: new files in place ->
-- [ ] mod update: nothing unpacked into patches\ ->
-- [ ] mod update: folder backed up first ->
-- [ ] mod update: installedTag saved ->
+- [x] mod update: new files in place -> `InstallTests.Mod_update`
+- [x] mod update: nothing unpacked into patches\ -> `InstallTests.Mod_update`
+- [x] mod update: folder backed up first -> `InstallTests.Mod_update`
+- [x] mod update: installedTag saved -> `InstallTests.Mod_update`
 - [ ] mod update: up to date afterwards ->
-- [ ] mod update cancelled: tag unchanged ->
+- [x] mod update cancelled: tag unchanged -> `InstallTests.Mod_update_cancelled`
 - [ ] mod: Launch opens the folder, does not run the .ips ->
-- [ ] mod: Get-AppFolder returns installDir ->
+- [x] mod: Get-AppFolder returns installDir -> `InstallTests.App_folder_is_installDir`
 - [ ] existing folder: tracked by release ->
 - [ ] existing folder, unknown release: shows UPDATE ->
 - [ ] not a mod: refused when no top-level program ->
