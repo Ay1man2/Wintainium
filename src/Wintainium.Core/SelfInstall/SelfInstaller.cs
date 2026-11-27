@@ -35,13 +35,27 @@ public static class SelfInstaller
     /// <summary>Files a v0.3.0 install carried next to its launcher; replaced by the single exe (I-11).</summary>
     public static readonly IReadOnlyList<string> LegacyFiles =
     [
-        "Wintainium.ps1",
         "Find-Sources.ps1",
         "known-apps.json",
         "wintainium-apps.example.json",
         "LICENSE",
         Path.Combine("assets", "icon.ico"),
     ];
+
+    /// <summary>
+    /// Kept in the install folder in place of the v0.3.0 script: a v0.3.0 Wintainium.exe reinstalls
+    /// itself when Wintainium.ps1 is missing, which would downgrade this install.
+    /// </summary>
+    public const string StubScript = "Wintainium.ps1";
+
+    public const string StubText =
+        "# Wintainium is now Wintainium.exe in this folder. This file only tells older versions\r\n" +
+        "# that Wintainium is installed here, so they don't replace the newer one.\r\n" +
+        "Write-Host 'Start Wintainium.exe instead.'\r\n" +
+        "exit 1\r\n";
+
+    /// <summary>A v0.3.0 portable zip, unpacked: it has no portable.txt, but these files say what it is.</summary>
+    public static readonly IReadOnlyList<string> V030PortableFiles = ["Wintainium.ps1", "Find-Sources.ps1", "known-apps.json"];
 
     /// <summary>The user's own files; only deleted when they say so on uninstall.</summary>
     public static readonly IReadOnlyList<string> UserFiles =
@@ -92,19 +106,42 @@ public static class SelfInstaller
     /// <summary>
     /// I-01 / I-02 / I-08: run here when this is the install folder, a portable copy, or not a
     /// single-file build (a development build). Otherwise install when there is no install, it is
-    /// older, or it has no Wintainium.exe; a newer install is never downgraded.
+    /// older, or it has no Wintainium.exe; a newer install is never downgraded. With no marker,
+    /// <paramref name="exeVersion"/> reads the installed exe's own version instead.
     /// </summary>
-    public static StartMode Decide(string here, string installDir, bool singleFile, Version own)
+    public static StartMode Decide(
+        string here,
+        string installDir,
+        bool singleFile,
+        Version own,
+        IEnumerable<string>? dropFolders = null,
+        Func<string, Version?>? exeVersion = null)
     {
         ArgumentNullException.ThrowIfNull(own);
-        if (!singleFile || SameFolder(here, installDir) || File.Exists(Path.Combine(here, PortableMarker)))
+        if (!singleFile || SameFolder(here, installDir) || IsPortable(here, dropFolders))
         {
             return StartMode.RunHere;
         }
 
-        Version? installed = ReadMarker(installDir);
+        string installedExe = Path.Combine(installDir, ExeName);
+        Version? installed = ReadMarker(installDir) ?? (File.Exists(installedExe) ? exeVersion?.Invoke(installedExe) : null);
         bool needed = installed is null || own > installed || !File.Exists(Path.Combine(installDir, ExeName));
         return needed ? StartMode.InstallAndStart : StartMode.StartInstalled;
+    }
+
+    /// <summary>
+    /// I-08 / N1: a portable copy has portable.txt beside it, or the files of an unpacked v0.3.0
+    /// portable zip. Never in a folder browsers save downloads into (<paramref name="dropFolders"/>:
+    /// Downloads, Desktop, temp), where a website could put such files next to the exe.
+    /// </summary>
+    public static bool IsPortable(string here, IEnumerable<string>? dropFolders = null)
+    {
+        if (dropFolders is not null && dropFolders.Any(d => !string.IsNullOrEmpty(d) && SameFolder(d, here)))
+        {
+            return false;
+        }
+
+        return File.Exists(Path.Combine(here, PortableMarker)) || V030PortableFiles.All(f => File.Exists(Path.Combine(here, f)));
     }
 
     /// <summary>True while that exe is running (Windows keeps a running exe locked).</summary>
@@ -153,9 +190,21 @@ public static class SelfInstaller
         return target;
     }
 
-    /// <summary>I-11: the v0.3.0 scripts and their files go; the assets folder too once it's empty.</summary>
+    /// <summary>
+    /// I-11: the v0.3.0 scripts and their files go, and the assets folder too once it's empty.
+    /// Wintainium.ps1 becomes a stub that does nothing (see <see cref="StubScript"/>).
+    /// </summary>
     public static void RemoveLegacyFiles(string dir)
     {
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, StubScript), StubText, new UTF8Encoding(false));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // a v0.3.0 exe started later may then reinstall itself; Wintainium still works
+        }
+
         foreach (string rel in LegacyFiles)
         {
             string f = Path.Combine(dir, rel);
@@ -236,25 +285,50 @@ public static class SelfInstaller
         return sb.ToString();
     }
 
+    /// <summary>True when cmd.exe reads the path as written inside double quotes.</summary>
+    public static bool SafeForCmd(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        return path.Length > 0 && path.IndexOfAny(['%', '"', '!']) < 0 && !path.Any(char.IsControl);
+    }
+
+    /// <summary>The files uninstall removes when the user keeps their data.</summary>
+    public static IEnumerable<string> OwnFiles =>
+        LegacyFiles.Append(StubScript).Append(Marker).Append(ExeName + ".new");
+
     /// <summary>
-    /// I-06: the cmd.exe line that removes the files once this process has exited. With
+    /// I-06: the cmd.exe arguments that remove the files once this process has exited. The exe stays
+    /// locked until then, so its removal is retried for up to a minute. With
     /// <paramref name="deleteData"/> the whole folder goes; otherwise only Wintainium's own files.
+    /// Every path is double-quoted; a folder cmd.exe can't quote safely is refused.
     /// </summary>
     public static string RemovalCommand(string dir, bool deleteData)
     {
-        var cmd = new StringBuilder("/c ping -n 3 127.0.0.1 >nul");
+        if (!SafeForCmd(dir))
+        {
+            throw new ArgumentException("The folder name has characters cmd.exe can't take safely.", nameof(dir));
+        }
+
+        static string Q(string p) => "\"" + p + "\"";
+        static string Retry(string what, string remove) =>
+            $"for /l %i in (1,1,60) do @if exist {what} ({remove} 2>nul & if exist {what} ping -n 2 127.0.0.1 >nul)";
+
+        var cmd = new StringBuilder("/d /v:off /c ");
         if (deleteData)
         {
-            cmd.Append(" & rmdir /s /q ").Append(Quote(dir));
-            return cmd.ToString();
+            string d = Q(dir.TrimEnd('\\', '/'));
+            return cmd.Append(Retry(d, "rmdir /s /q " + d)).ToString();
         }
 
-        foreach (string rel in LegacyFiles.Append(Marker).Append(ExeName))
+        cmd.Append("del /f /q");
+        foreach (string rel in OwnFiles)
         {
-            cmd.Append(" & del /f /q ").Append(Quote(Path.Combine(dir, rel)));
+            cmd.Append(' ').Append(Q(Path.Combine(dir, rel)));
         }
 
-        cmd.Append(" & rmdir ").Append(Quote(Path.Combine(dir, "assets")));
+        string exe = Q(Path.Combine(dir, ExeName));
+        cmd.Append(" 2>nul & ").Append(Retry(exe, "del /f /q " + exe));
+        cmd.Append(" & rmdir ").Append(Q(Path.Combine(dir, "assets"))).Append(" 2>nul");
         return cmd.ToString();
     }
 }
