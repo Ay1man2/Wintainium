@@ -120,7 +120,7 @@ public static partial class GitHubTokenCheck
             // to be harmless; ask for a classic token with no scopes instead (that one can be checked).
             bool safe = scopes.Length == 0 && !fine;
             string message = fine
-                ? "This is a fine-grained token (github_pat_...). GitHub doesn't report what those are allowed to do, so Wintainium can't confirm it has no permissions. Click Open GitHub to make a classic token with every box unticked instead."
+                ? "This is a fine-grained token (github_pat_...). GitHub doesn't report what those are allowed to do, so Wintainium can't confirm it has no permissions. Use a classic token with every box unticked instead."
                 : scopes.Length > 0
                     ? $"This token has permissions ({scopes}). Wintainium only needs a token with none. Make a new one with every box unticked."
                     : "Token accepted: no permissions, read-only public access.";
