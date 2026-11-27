@@ -19,9 +19,9 @@ namespace Wintainium.App;
 /// <summary>The main window: toolbar, app grid, log pane and status bar (Show-Gui of v0.3.0).</summary>
 public partial class MainWindow : Window
 {
-    private const string NotPortedYet = "This part of Wintainium isn't in this build yet.";
-
     private readonly string dataFolder;
+    private readonly bool setupFirst;
+    private readonly List<string> scanExtra = [];
     private readonly WindowLog log;
     private readonly WindowPrompts prompts;
     private readonly UiShell shell;
@@ -31,11 +31,13 @@ public partial class MainWindow : Window
     private bool busy;
     private bool closeConfirmed;
 
-    public MainWindow(string dataFolder)
+    /// <param name="setupFirst">--setup: the wizard opens first even when setup was done.</param>
+    public MainWindow(string dataFolder, bool setupFirst = false)
     {
         InitializeComponent();
         Title = $"{AppInfo.Name} {AppInfo.Version}";
         this.dataFolder = dataFolder;
+        this.setupFirst = setupFirst;
         log = new WindowLog(Dispatcher, LogScroll, StatusText);
         Log.ItemsSource = log.Lines;
         prompts = new WindowPrompts(this, log);
@@ -104,7 +106,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        // M-13: the setup wizard comes first when setup was never done (PR 9)
+        // M-13: the setup wizard comes first when setup was never done (or with --setup)
+        if (setupFirst || !session.Settings.SetupDone)
+        {
+            ShowSetup();
+        }
+
         await RunBusyAsync("Checking...", () => RefreshGridAsync(force: false));
     }
 
@@ -250,20 +257,53 @@ public partial class MainWindow : Window
 
     private void BtnFolder_Click(object sender, RoutedEventArgs e) => Quick(r => RowActions.OpenFolder(r, shell, log));
 
-    // Add app, Scan and Setup are ported in PR 9; until then they only say so
-    private void BtnAdd_Click(object sender, RoutedEventArgs e) => NotYet();
-
-    private void BtnScan_Click(object sender, RoutedEventArgs e) => NotYet();
-
-    private void BtnSetup_Click(object sender, RoutedEventArgs e) => NotYet();
-
-    private void NotYet()
-    {
-        if (!busy)
+    private async void BtnAdd_Click(object sender, RoutedEventArgs e) =>
+        await RunBusyAsync("Adding an app...", async () =>
         {
-            log.Write(NotPortedYet, LogColor.Yellow);
+            AddApp add = session!.AddApp(prompts, shell, threats);
+            await Task.Run(() => add.RunAsync());
+            await RefreshGridAsync(force: false);
+        });
+
+    // M-14: a refresh after Setup; after Scan only when something was added
+    private async void BtnScan_Click(object sender, RoutedEventArgs e)
+    {
+        if (busy || session is null)
+        {
+            return;
+        }
+
+        if (ScanWindow.Run(this, session, scanExtra) > 0)
+        {
+            await RunBusyAsync("Checking...", () => RefreshGridAsync(force: false));
         }
     }
+
+    private async void BtnSetup_Click(object sender, RoutedEventArgs e)
+    {
+        if (busy || session is null)
+        {
+            return;
+        }
+
+        ShowSetup();
+        await RunBusyAsync("Checking...", () => RefreshGridAsync(force: false));
+    }
+
+    private void ShowSetup() => SetupWizard.Run(
+        this,
+        session!,
+        shell,
+        (owner, extra) =>
+        {
+            foreach (string f in extra.Where(f => !scanExtra.Contains(f)))
+            {
+                scanExtra.Add(f);
+            }
+
+            return ScanWindow.Run(owner, session!, scanExtra);
+        },
+        (desktop, start) => Shortcuts.Create(desktop, start, log));
 
     private async void BtnRefresh_Click(object sender, RoutedEventArgs e) =>
         await RunBusyAsync("Checking...", () => RefreshGridAsync(force: false));

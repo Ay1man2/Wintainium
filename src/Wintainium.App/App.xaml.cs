@@ -56,8 +56,7 @@ public partial class App : Application
             return;
         }
 
-        // --setup opens the wizard first; the wizard is ported in PR 9
-        var main = new MainWindow(data);
+        var main = new MainWindow(data, setupFirst: cl.Setup);
         MainWindow = main;
         main.Show();
     }

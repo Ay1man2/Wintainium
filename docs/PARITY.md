@@ -23,7 +23,7 @@ How to use it:
 - [x] **D-02** App list read as an array also when it holds one entry. Source: startup block. Proof: `AppListTests.One_entry_written_as_an_object_reads_as_a_list`
 - [ ] **D-03** App fields understood: `name`, `exe`, `source` (`github`, `gitlab`, `gitea`, `itch`, `dolphin`, `manual`), `repo`, `tag`, `prerelease`, `api`, `url`, `asset`, `downloadUrl`, `update`, `emudeckFn`, `hint`, `launch`, `graceDays`, `installDir`, `installedTag`, `note`. Source: whole script. Proof:
 - [ ] **D-04** Environment variables in `exe`, `launch`, `installDir` are expanded (`%APPDATA%` etc.). Source: `Get-AppRows`, `Start-App`, `Get-AppFolder`. Proof:
-- [ ] **D-05** App list written after Add app, Remove, scan add, and installedTag updates; other fields of every entry kept. Source: `Add-App`, `Remove-AppEntry`, `Add-ScanSelection`, `Save-InstalledTag`. Proof:
+- [ ] **D-05** App list written after Add app, Remove, scan add, and installedTag updates; other fields of every entry kept. Source: `Add-App`, `Remove-AppEntry`, `Add-ScanSelection`, `Save-InstalledTag`. Proof: Add app: `AddAppTests`; scan: `SetupAndScanTests.Add_selected_adds_ticked_rows_with_a_program_and_unique_names`; remove: `SessionTests.Remove_asks_then_drops_the_entry_and_its_cache_but_not_files`
 - [x] **D-06** Settings `wintainium-settings.json`: `installRoot`, `downloadDir`, `setupDone`, `goldSelf`, `scanIgnore`; unreadable file treated as empty. Source: settings block, `Save-Settings`. Proof: `SettingsTests` (all)
 - [x] **D-07** Default folders: installs `%USERPROFILE%\Wintainium\Apps`, downloads `%USERPROFILE%\Downloads\Wintainium`; settings override defaults. Source: `param`, settings block. Proof: `SessionTests.Folders_default_and_follow_settings`
 - [x] **D-08** Release cache `wintainium-cache.json`, keyed by app name: `Tag`, `Date`, `Page`, `Assets` (name + url), `Notes` (cut at 20,000 chars), `Fetched`; unreadable file treated as empty. Source: `Get-LatestCached`, `Save-Cache`. Proof: `ReleaseCacheTests` (all)
@@ -107,15 +107,15 @@ How to use it:
 
 ## 8. Add app
 
-- [ ] **A-01** URL recognised: GitHub (URL or `owner/repo`), itch.io game page, gitlab.com project (permalink/latest API), any other host as Gitea/Forgejo (`/api/v1/repos/.../releases/latest`); anything else cancelled with a message. Source: `Add-App`. Proof:
-- [ ] **A-02** Name asked, default = repo/game name. GitHub asks about pre-releases. Source: `Add-App`. Proof:
-- [ ] **A-03** itch.io: asks for the installed exe; update method `page`. Source: `Add-App`. Proof:
-- [ ] **A-04** Existing exe path: tracked with `download`, `page`. Source: `Add-App`. Proof:
-- [ ] **A-05** Existing folder (mod): reads the release, refuses an empty folder, tracks the first `.ips` (else first file), asks if the latest release is the one installed (No = `unknown`), methods `zip`, `page`. Source: `Add-App`. Proof:
-- [ ] **A-06** Install now: shows the latest release, asks the folder (default `<installRoot>\<name>`), asks before using a non-empty folder, offers only Windows files (zip/7z/exe/msi, not linux/appimage/macos/darwin/android/.sha256/.zsync), downloads with checksum, unpacks or copies. Source: `Add-App`. Proof:
-- [ ] **A-07** After installing: picks the main program (numbered choice when several, Enter = 1); no exe = asks if it's a mod/data pack (tracked by release) or uses top-level files; nothing unpacked = not added. Source: `Add-App`. Proof:
-- [ ] **A-08** Program gone 2 s after install = Windows Security help, not added. Source: `Add-App`. Proof:
-- [ ] **A-09** Saves an `asset` pattern with the version wildcarded, update method `zip` or `download` then `page`. Source: `Add-App`. Proof:
+- [x] **A-01** URL recognised: GitHub (URL or `owner/repo`), itch.io game page, gitlab.com project (permalink/latest API), any other host as Gitea/Forgejo (`/api/v1/repos/.../releases/latest`); anything else cancelled with a message. Source: `Add-App`. Proof: `AddAppTests.Links_are_recognised`, `Other_text_is_not_a_link`, `Not_a_link_is_cancelled`
+- [x] **A-02** Name asked, default = repo/game name. GitHub asks about pre-releases. Source: `Add-App`. Proof: `AddAppTests.Itch_tracks_an_installed_copy` (default name), `An_installed_exe_is_tracked_by_download` (name, pre-releases)
+- [x] **A-03** itch.io: asks for the installed exe; update method `page`. Source: `Add-App`. Proof: `AddAppTests.Itch_tracks_an_installed_copy`, `Itch_without_an_exe_is_cancelled`
+- [x] **A-04** Existing exe path: tracked with `download`, `page`. Source: `Add-App`. Proof: `AddAppTests.An_installed_exe_is_tracked_by_download`
+- [x] **A-05** Existing folder (mod): reads the release, refuses an empty folder, tracks the first `.ips` (else first file), asks if the latest release is the one installed (No = `unknown`), methods `zip`, `page`. Source: `Add-App`. Proof: `AddAppTests.An_installed_mod_folder_is_tracked_by_release`, `A_mod_folder_not_on_the_latest_release_is_unknown`, `An_empty_mod_folder_is_refused`
+- [x] **A-06** Install now: shows the latest release, asks the folder (default `<installRoot>\<name>`), asks before using a non-empty folder, offers only Windows files (zip/7z/exe/msi, not linux/appimage/macos/darwin/android/.sha256/.zsync), downloads with checksum, unpacks or copies. Source: `Add-App`. Proof: `AddAppTests.Install_now_unpacks_into_the_default_folder_and_saves_the_pattern`, `Install_now_copies_a_non_archive`, `A_folder_with_files_is_only_used_after_asking`, `Release_errors_are_reported` (checksums: `DownloadTests`)
+- [x] **A-07** After installing: picks the main program (numbered choice when several, Enter = 1); no exe = asks if it's a mod/data pack (tracked by release) or uses top-level files; nothing unpacked = not added. Source: `Add-App`. Proof: `AddAppTests.Several_programs_ask_which_is_main`, `A_data_pack_is_tracked_by_release`, `No_exe_and_not_a_pack_uses_the_top_files`
+- [x] **A-08** Program gone 2 s after install = Windows Security help, not added. Source: `Add-App`. Proof: `AddAppTests.A_program_removed_by_windows_security_is_not_added`
+- [x] **A-09** Saves an `asset` pattern with the version wildcarded, update method `zip` or `download` then `page`. Source: `Add-App`. Proof: `AddAppTests.Asset_pattern_wildcards_the_version`
 
 ## 9. Other row actions
 
@@ -188,21 +188,21 @@ Questions asked today (all become dialogs):
 - [ ] **N-01** Window "Wintainium setup", 660x600, "Step N of 5", Back (hidden on step 1), Next / Finish, Cancel. Source: `$wizardXaml`, `Set-WizardPage`. Proof:
 - [ ] **N-02** Step 1 welcome text and the "Before you use it" box (wording updated for the exe, see C-03). Source: `$wizardXaml`. Proof:
 - [ ] **N-03** Step 2 folders: install and download boxes filled with current values, Browse... pickers starting at the current folder. Source: `Select-WizardFolder`. Proof:
-- [ ] **N-04** Step 3 token: explanation, green "no permissions" box, three steps, Open GitHub, hidden-text box, Check and save; results: saved (limit, expiry), not safe / rejected ("Nothing was saved."); current state text when a token exists or not. Source: `CheckToken`, `Update-WizardTokenStatus`. Proof:
-- [ ] **N-05** Step 4 scan: Scan this PC opens the scan window, also scanning the install folder from step 2; result text with the number added. Source: `ScanNow`. Proof:
+- [ ] **N-04** Step 3 token: explanation, green "no permissions" box, three steps, Open GitHub, hidden-text box, Check and save; results: saved (limit, expiry), not safe / rejected ("Nothing was saved."); current state text when a token exists or not. Source: `CheckToken`, `Update-WizardTokenStatus`. Proof: texts and saving: `SetupAndScanTests.Wizard_texts`, `A_safe_token_is_saved`, `A_scoped_token_is_not_saved`; window: PC check pending
+- [ ] **N-05** Step 4 scan: Scan this PC opens the scan window, also scanning the install folder from step 2; result text with the number added. Source: `ScanNow`. Proof: text: `SetupAndScanTests.Wizard_texts`; window: PC check pending
 - [ ] **N-06** Step 5 shortcuts: Desktop and Start menu (both ticked), pin-to-taskbar tip, "You're set" text. Source: `$wizardXaml`. Proof:
-- [ ] **N-07** Finish saves folders and `setupDone`, creates the ticked shortcuts (with icon, description and taskbar ID), logs "Setup saved...". Shortcut errors logged, not fatal. Source: `Complete-Wizard`. Proof:
-- [ ] **N-08** Cancel or closing still sets `setupDone`, so the wizard doesn't open on every start. Source: `Show-SetupWizard`. Proof:
+- [ ] **N-07** Finish saves folders and `setupDone`, creates the ticked shortcuts (with icon, description and taskbar ID), logs "Setup saved...". Shortcut errors logged, not fatal. Source: `Complete-Wizard`. Proof: saving: `SetupAndScanTests.Finish_saves_folders_and_setup_done`; shortcuts: PC check pending (taskbar ID comes with PR 10)
+- [x] **N-08** Cancel or closing still sets `setupDone`, so the wizard doesn't open on every start. Source: `Show-SetupWizard`. Proof: `SetupAndScanTests.Closing_the_wizard_still_counts_as_seen`
 
 ## 14. Scan window
 
 - [ ] **C-01** Window "Find apps you already have", 820x660 (min 640x420), intro text, scan starts when shown, "Scanning your PC... N s" while it runs, window stays responsive, closing stops the scan. Source: `Show-ScanWindow`, `Start-PcScan`. Proof:
 - [ ] **C-02** Row per candidate: tick, editable name, source line, path, note; ticked by default for recognized/found apps. Source: `Add-ScanRow`. Proof:
-- [ ] **C-03** Downloads without an installed program: amber edge and text, unticked, Locate .exe... button; ticking one opens Locate; Locate fills the path and ticks it. Source: `Add-ScanRow`, `Invoke-ScanLocate`. Proof:
-- [ ] **C-04** Don't show again: hides the row now and in future scans (`scanIgnore`); Show hidden (N) clears the list and rescans. Source: `Hide-ScanRow`, `SHidden`. Proof:
+- [ ] **C-03** Downloads without an installed program: amber edge and text, unticked, Locate .exe... button; ticking one opens Locate; Locate fills the path and ticks it. Source: `Add-ScanRow`, `Invoke-ScanLocate`. Proof: `SetupAndScanTests.Locate_fills_the_program_and_ticks_the_row`; window: PC check pending
+- [x] **C-04** Don't show again: hides the row now and in future scans (`scanIgnore`); Show hidden (N) clears the list and rescans. Source: `Hide-ScanRow`, `SHidden`. Proof: `SetupAndScanTests.Hide_and_show_hidden_edit_scan_ignore` (buttons: PC check pending)
 - [ ] **C-05** Scan another folder...: adds a folder and rescans; footer lists extra folders. Source: `SFolder`. Proof:
-- [ ] **C-06** Summary: "Found N apps." plus the Locate hint, or "Nothing new found..." in green. Mod count footer. Source: `Update-ScanSummary`, `Show-ScanResults`. Proof:
-- [ ] **C-07** Add selected (N): disabled when nothing is ticked or a scan runs; adds ticked rows with a program, makes names unique ("Name (2)"), saves, logs "Added N apps from the scan.", closes. Source: `Add-ScanSelection`, `Update-ScanCount`. Proof:
+- [x] **C-06** Summary: "Found N apps." plus the Locate hint, or "Nothing new found..." in green. Mod count footer. Source: `Update-ScanSummary`, `Show-ScanResults`. Proof: `SetupAndScanTests.Summary_texts`, `Footer_lists_mods_and_extra_folders`
+- [ ] **C-07** Add selected (N): disabled when nothing is ticked or a scan runs; adds ticked rows with a program, makes names unique ("Name (2)"), saves, logs "Added N apps from the scan.", closes. Source: `Add-ScanSelection`, `Update-ScanCount`. Proof: `SetupAndScanTests.Add_selected_adds_ticked_rows_with_a_program_and_unique_names`, `Nothing_ticked_saves_nothing`; button: PC check pending
 - [ ] **C-08** Scan failure shows "The scan didn't finish: <why>" in red. Source: scan timer. Proof:
 
 ## 15. PC scan engine (Find-Sources)
@@ -277,7 +277,7 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [x] **X-12** Old backups pruned; files a new zip release no longer has are reported, not deleted. (correctness 5) Proof: `InstallTests.Old_backups_pruned`, `InstallTests.Leftover_files_are_kept_and_reported` (PR 6). Intentional change (decided by the owner): leftover files are never deleted, because they can be saves or settings; after an update the app lists them with their folder and offers to open it.
 - [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof:
 - [ ] **X-14** Closing any yes/no dialog with X or Alt+F4 = No (already true in v0.3.0's window; now true everywhere). (correctness 7) Proof:
-- [ ] **X-15** Wizard welcome text describes the exe instead of "an unsigned PowerShell script ... Wintainium.ps1". Proof:
+- [ ] **X-15** Wizard welcome text describes the exe instead of "an unsigned PowerShell script ... Wintainium.ps1". Proof: `src/Wintainium.App/Ui/SetupWizard.xaml` (step 1); PC check pending
 
 ## Dropped on purpose
 
