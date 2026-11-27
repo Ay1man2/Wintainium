@@ -226,7 +226,18 @@ public class TokenTests
             Assert.Equal(0, p.ExitCode);
         }
 
-        StoredToken t = TokenFile.Read(path, new DpapiProtector());
+        string written = File.ReadAllText(path);
+        StoredToken t;
+        try
+        {
+            t = TokenFile.Read(path, new DpapiProtector());
+        }
+        catch (TokenFileException ex)
+        {
+            Assert.Fail($"{ex.Message}\nFile written by PowerShell:\n{written}");
+            throw;
+        }
+
         Assert.Equal("ghp_fromPS51", t.Token);
         Assert.Equal(new DateTime(2027, 11, 18, 10, 0, 0), t.Expires);
     }

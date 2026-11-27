@@ -34,8 +34,9 @@ public static class TokenFile
             throw new TokenFileException($"Could not read {Path.GetFileName(path)}: {ex.Message}", ex);
         }
 
-        XElement? ms = doc.Root?.Element(Ps + "Obj")?.Element(Ps + "MS");
-        XElement? ss = ms?.Elements(Ps + "SS").FirstOrDefault(e => (string?)e.Attribute("N") == "Token");
+        // Look anywhere in the document: the layout around the properties differs a little between
+        // PowerShell versions, but the Token (SS) and Expires (DT) elements are always named.
+        XElement? ss = doc.Descendants(Ps + "SS").FirstOrDefault(e => (string?)e.Attribute("N") == "Token");
         if (ss is null || string.IsNullOrWhiteSpace(ss.Value))
         {
             throw new TokenFileException($"{Path.GetFileName(path)} holds no token.");
@@ -61,7 +62,7 @@ public static class TokenFile
         }
 
         DateTime? expires = null;
-        XElement? dt = ms!.Elements(Ps + "DT").FirstOrDefault(e => (string?)e.Attribute("N") == "Expires");
+        XElement? dt = doc.Descendants(Ps + "DT").FirstOrDefault(e => (string?)e.Attribute("N") == "Expires");
         if (dt is not null)
         {
             try
