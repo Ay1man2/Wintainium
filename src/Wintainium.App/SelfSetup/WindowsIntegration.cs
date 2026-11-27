@@ -37,11 +37,18 @@ internal static class WindowsIntegration
         string? exe = Environment.ProcessPath;
         if (exe is null)
         {
+            log.Write("Could not create shortcuts: Wintainium's own location is unknown.", LogColor.Yellow);
             return;
         }
 
         foreach (string folder in ShortcutFolders(desktop, startMenu))
         {
+            if (folder.Length == 0)
+            {
+                log.Write("Could not create a shortcut: Windows reports no folder for it.", LogColor.Yellow);
+                continue;
+            }
+
             try
             {
                 ShellLink.Write(Path.Combine(folder, "Wintainium.lnk"), exe, "", Path.GetDirectoryName(exe) ?? "", ShortcutDescription, exe, AppId);
