@@ -6,7 +6,8 @@ Wintainium is now a C# program on .NET 10 instead of PowerShell scripts. It look
 
 ### Changed
 - `Wintainium.exe` is the whole app: one self-contained file that carries the .NET runtime, so nothing needs to be installed. It installs, updates and uninstalls itself as before (`%LOCALAPPDATA%\Programs\Wintainium`, Settings > Apps entry, never a downgrade). Running it over a v0.3.0 install upgrades it in place: the old script files are removed and your app list, settings and token are kept. Updating Wintainium from its own row works across the change.
-- The portable zip is now `Wintainium.exe` with a `portable.txt` beside it, which tells it to run from that folder and install nothing.
+- The portable zip is now `Wintainium.exe` with a `portable.txt` beside it, which tells it to run from that folder and install nothing. A v0.3.0 portable folder keeps working when you put the new exe in it. In Downloads, on the Desktop or in the temp folder the exe always installs, since a website could have saved a `portable.txt` there.
+- The install folder keeps a small `Wintainium.ps1` that does nothing, so an older v0.3.0 `Wintainium.exe` started later doesn't replace the newer install.
 - Options instead of script commands: `--list`, `--setup`, `--data <folder>` (in place of `-Config`), `--install-only` and `--uninstall`. Grace days and cache minutes are `graceDays` and `cacheMinutes` in `wintainium-settings.json`; the EmuDeck location is `emuDeckExe` there.
 - Release files are built by GitHub Actions from the tagged commit, with build attestations (`gh attestation verify Wintainium.exe --repo Ay1man2/Wintainium`).
 - Version numbers decide more often: an installed 2.x against a released 3.x counts as an update even when the release date is close. Exact version matches only: 12.1.0 no longer "contains" 2.1.
