@@ -380,6 +380,7 @@ public sealed class AddAppTests : IDisposable
         Assert.Null(await Flow().RunAsync()); // "is it a mod or data pack?" answered No
         Assert.Contains(("  No program file at the top of that folder, so I am not adding it.", LogColor.Red), rig.Log.Lines);
         Assert.Empty(list.Entries);
+        Assert.False(Directory.Exists(rig.Dir.File("Apps/Deep"))); // what it unpacked is taken away again
     }
 
     [Fact]

@@ -14,6 +14,7 @@ Wintainium is now a C# program on .NET 10 instead of PowerShell scripts. It look
 - A checksum file that is there but can't be used now stops the download instead of saying "not verified".
 - After a zip update, files the new release no longer has are listed with their folder (with an offer to open it) instead of being left without a word. They are never deleted, since they can be saves or settings. Old update backups are pruned, keeping the last two.
 - Typed (Y/n) questions in Add app answer Yes on Enter, as their text says.
+- Cancel on an Add app question stops Add app instead of answering with the default (Cancel on "Install folder" used to install into the default folder). If it had already installed files, they are removed again; files that were already in the folder are kept.
 - The setup wizard describes Wintainium as an unsigned program instead of a PowerShell script.
 - The README describes the exe: the release files and how to check them, portable use, running from source and the options.
 
