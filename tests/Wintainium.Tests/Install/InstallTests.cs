@@ -194,6 +194,58 @@ public sealed class InstallTests : IDisposable
         Assert.True(Directory.Exists(rig.Dir.File("apps/Tool2.backup-20200101-0000")));
     }
 
+    [Fact(DisplayName = "X-12: files the new release doesn't have are kept and reported, and the folder can be opened")]
+    public async Task Leftover_files_are_kept_and_reported()
+    {
+        string root = rig.Dir.File("apps/Tool");
+        string exe = rig.Dir.Write("apps/Tool/Tool.exe", "old");
+        rig.Dir.Write("apps/Tool/old-plugin.dll", "p");
+        rig.Dir.Write("apps/Tool/saves/slot1.sav", "s");
+        rig.Prompts.Confirms.Enqueue(true); // Continue?
+        rig.Prompts.Confirms.Enqueue(true); // Open the folder now?
+        Assert.True(await ZipInstaller.InstallAsync(Entry($$"""{ "name": "Tool", "exe": "{{Esc(exe)}}" }"""), ZipFileOf(("Tool.exe", "new"), ("readme.txt", "r")), rig.Ctx));
+        Assert.Equal("new", File.ReadAllText(exe));
+        Assert.True(File.Exists(Path.Combine(root, "old-plugin.dll")));
+        Assert.True(File.Exists(Path.Combine(root, "saves", "slot1.sav")));
+        string notice = rig.Prompts.Asked[^1];
+        Assert.Contains("2 file(s) in " + root, notice, StringComparison.Ordinal);
+        Assert.Contains("Nothing was deleted", notice, StringComparison.Ordinal);
+        Assert.Contains("  old-plugin.dll", notice, StringComparison.Ordinal);
+        Assert.Contains("  " + Path.Combine("saves", "slot1.sav"), notice, StringComparison.Ordinal);
+        Assert.DoesNotContain("readme.txt", notice, StringComparison.Ordinal);
+        Assert.Equal([root], rig.Shell.Shown);
+    }
+
+    [Fact]
+    public async Task No_leftover_notice_when_every_file_was_replaced_or_on_a_first_install()
+    {
+        string exe = rig.Dir.Write("apps/Tool/Tool.exe", "old");
+        rig.Prompts.Confirms.Enqueue(true);
+        Assert.True(await ZipInstaller.InstallAsync(Entry($$"""{ "name": "Tool", "exe": "{{Esc(exe)}}" }"""), ZipFileOf(("Tool.exe", "new")), rig.Ctx));
+        Assert.Single(rig.Prompts.Asked);
+
+        string fresh = rig.Dir.File("apps/New/New.exe");
+        rig.Prompts.Confirms.Enqueue(true);
+        Assert.True(await ZipInstaller.InstallAsync(Entry($$"""{ "name": "New", "exe": "{{Esc(fresh)}}" }"""), ZipFileOf(("New.exe", "n")), rig.Ctx));
+        Assert.Equal(2, rig.Prompts.Asked.Count);
+        Assert.Empty(rig.Shell.Shown);
+    }
+
+    [Fact]
+    public void Long_leftover_lists_are_cut_short()
+    {
+        string dir = rig.Dir.File("apps/Many");
+        for (int i = 0; i < 20; i++)
+        {
+            rig.Dir.Write($"apps/Many/f{i:00}.dat", "x");
+        }
+
+        IReadOnlyList<string> left = ZipInstaller.Leftovers(dir, [Path.Combine(dir, "f00.dat")]);
+        Assert.Equal(19, left.Count);
+        Assert.Equal("f01.dat", left[0]);
+        Assert.Equal(15, ZipInstaller.LeftoversListed);
+    }
+
     [Fact]
     public void Backup_name_counts_up_within_the_same_minute()
     {

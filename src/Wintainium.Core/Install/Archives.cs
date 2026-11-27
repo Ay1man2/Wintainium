@@ -22,6 +22,9 @@ public sealed class UnsafeArchiveException : Exception
 }
 
 /// <summary>Unpacking zip and 7z files (Test-Archive, Expand-ToFolder).</summary>
+/// <summary>Where an archive was unpacked and the files it wrote.</summary>
+public sealed record UnpackResult(string Folder, IReadOnlyList<string> Files);
+
 public static partial class Archives
 {
     /// <summary>Programs and scripts that keep the download's mark after unpacking (X-02).</summary>
@@ -45,7 +48,13 @@ public static partial class Archives
     /// <paramref name="dir"/> already ends with, the files go one level up instead (X-08).
     /// Returns the folder the files went into.
     /// </summary>
-    public static async Task<string> ExpandToFolderAsync(string file, string dir, InstallContext ctx, string? exeName = null, CancellationToken cancel = default)
+    public static async Task<string> ExpandToFolderAsync(string file, string dir, InstallContext ctx, string? exeName = null, CancellationToken cancel = default) =>
+        (await ExpandAsync(file, dir, ctx, exeName, cancel).ConfigureAwait(false)).Folder;
+
+    /// <summary>
+    /// <see cref="ExpandToFolderAsync"/>, also returning the full path of every file it wrote.
+    /// </summary>
+    public static async Task<UnpackResult> ExpandAsync(string file, string dir, InstallContext ctx, string? exeName = null, CancellationToken cancel = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         string tmp = Path.Combine(ctx.TempDir, "wintainium-" + Guid.NewGuid().ToString("N"));
@@ -76,8 +85,16 @@ public static partial class Archives
 
             string target = TargetFolder(src, dir, exeName);
             string? host = HostUrl(ctx.Mark.Read(file));
-            CopyTree(src, target, host is null ? null : f => MarkIfRunnable(f, host, ctx.Mark));
-            return target;
+            var written = new List<string>();
+            CopyTree(src, target, f =>
+            {
+                written.Add(f);
+                if (host is not null)
+                {
+                    MarkIfRunnable(f, host, ctx.Mark);
+                }
+            });
+            return new UnpackResult(target, written);
         }
         finally
         {
