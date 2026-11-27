@@ -258,7 +258,7 @@ public sealed class DownloadTests : IDisposable
         var quarantining = new InstallContext
         {
             Http = ctx.Http, Log = ctx.Log, Prompts = ctx.Prompts, Shell = ctx.Shell, Mark = ctx.Mark, Threats = ctx.Threats,
-            Processes = ctx.Processes, DownloadDir = ctx.DownloadDir, TempDir = ctx.TempDir, Now = ctx.Now,
+            Processes = ctx.Processes, DownloadDir = ctx.DownloadDir, EmuDeckExe = ctx.EmuDeckExe, EmuDeckData = ctx.EmuDeckData, TempDir = ctx.TempDir, Now = ctx.Now,
             Delay = (_, _) =>
             {
                 File.Delete(DlFile(Zip.Name));
@@ -452,6 +452,7 @@ public sealed class DownloadTests : IDisposable
             .Where(f => File.ReadAllText(f).Contains(".OpenUrl(", StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .ToList();
-        Assert.Equal(["WebPage.cs"], callers);
+        // UiShell only hands an already-checked link on to the real shell on the window's thread
+        Assert.Equal(["UiShell.cs", "WebPage.cs"], callers.Order(StringComparer.Ordinal));
     }
 }
