@@ -143,7 +143,19 @@ public static class StatusEngine
             return false;
         }
 
-        return string.Equals(exePath, Path.Combine(appFolder, "Wintainium.exe"), StringComparison.OrdinalIgnoreCase)
-            || string.Equals(exePath, Path.Combine(appFolder, "Wintainium.ps1"), StringComparison.OrdinalIgnoreCase);
+        // full paths, so C:\Apps/Wintainium.exe and c:\apps\Wintainium.exe are the same file
+        string exe;
+        try
+        {
+            exe = Path.GetFullPath(exePath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+
+        string folder = Path.GetFullPath(appFolder);
+        return string.Equals(exe, Path.Combine(folder, "Wintainium.exe"), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(exe, Path.Combine(folder, "Wintainium.ps1"), StringComparison.OrdinalIgnoreCase);
     }
 }
