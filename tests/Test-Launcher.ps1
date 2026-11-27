@@ -97,16 +97,19 @@ try {
     # 4d. ... even with a planted installed-version.txt beside it
     $r = Test-Folder 'planted-marker' { param($d) Set-Content (Join-Path $d 'Wintainium.ps1') 'planted'; Set-Content (Join-Path $d 'installed-version.txt') '99.0.0.0' }
     Check 'planted script with a planted marker ignored' ($r.Code -eq 0 -and $r.Installed -and (Get-Content (Join-Path $r.Dir 'Wintainium.ps1') -Raw).Trim() -eq 'planted')
-    # 4d2. a git worktree (.git file pointing at a real git folder): runs in place
-    $gd = Join-Path $root 'real-gitdir'; New-Item -ItemType Directory $gd | Out-Null; Set-Content (Join-Path $gd 'HEAD') 'ref: refs/heads/dev'
-    $r = Test-Folder 'worktree' { param($d) Set-Content (Join-Path $d '.git') "gitdir: $gd"; Set-Content (Join-Path $d 'Wintainium.ps1') 'my worktree copy' }
-    Check 'git worktree: runs its own scripts' ($r.Code -eq 0 -and -not $r.Installed)
+    # 4d2. a .git file (worktree style) is never trusted, even when it points at a real git folder
+    $gd = Join-Path $root 'other-repo/.git'; New-Item -ItemType Directory $gd -Force | Out-Null; Set-Content (Join-Path $gd 'HEAD') 'ref: refs/heads/main'
+    $r = Test-Folder 'gitfile-other-repo' { param($d) Set-Content (Join-Path $d '.git') "gitdir: $gd"; Set-Content (Join-Path $d 'Wintainium.ps1') 'planted' }
+    Check '.git file pointing at another repo ignored' ($r.Code -eq 0 -and $r.Installed)
     # 4d3. a downloaded file named .git beside a planted script: not a clone
     $r = Test-Folder 'planted-gitfile' { param($d) Set-Content (Join-Path $d '.git') 'anything'; Set-Content (Join-Path $d 'Wintainium.ps1') 'planted' }
     Check 'planted .git file ignored, own copy installed' ($r.Code -eq 0 -and $r.Installed)
-    # 4d4. ... even one that says gitdir: but points nowhere real
-    $r = Test-Folder 'planted-gitdir' { param($d) Set-Content (Join-Path $d '.git') 'gitdir: C:\nowhere\.git'; Set-Content (Join-Path $d 'Wintainium.ps1') 'planted' }
-    Check 'planted .git file with a fake gitdir ignored' ($r.Code -eq 0 -and $r.Installed)
+    # 4d4. ... or one that points at a network share
+    $r = Test-Folder 'gitfile-unc' { param($d) Set-Content (Join-Path $d '.git') 'gitdir: \\attacker.example\share\.git'; Set-Content (Join-Path $d 'Wintainium.ps1') 'planted' }
+    Check '.git file pointing at a network share ignored' ($r.Code -eq 0 -and $r.Installed)
+    # 4d5. a .git folder without HEAD (made by hand, not by git) is not a clone either
+    $r = Test-Folder 'empty-gitdir' { param($d) New-Item -ItemType Directory (Join-Path $d '.git') | Out-Null; Set-Content (Join-Path $d 'Wintainium.ps1') 'planted' }
+    Check '.git folder without HEAD ignored' ($r.Code -eq 0 -and $r.Installed)
     # 4e. a genuine Wintainium.ps1 next to a changed Find-Sources.ps1: not trusted either
     $r = Test-Folder 'mixed' { param($d) Copy-Item (Join-Path $src '*') $d -Recurse; Set-Content (Join-Path $d 'Find-Sources.ps1') 'planted' }
     Check 'genuine script beside a changed helper not trusted' ($r.Code -eq 0 -and $r.Installed)
