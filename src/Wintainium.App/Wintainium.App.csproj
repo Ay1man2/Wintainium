@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The WPF window. Published as one self-contained Wintainium.exe; the exact
+       publish command is in .github/workflows/build.yml. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- lets the cloud and Linux build it; it only runs on Windows -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>Wintainium</AssemblyName>
+    <RootNamespace>Wintainium.App</RootNamespace>
+    <AssemblyTitle>Wintainium</AssemblyTitle>
+    <Description>Obtainium-style app manager for Windows</Description>
+    <ApplicationIcon>..\..\assets\icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WPF isn't trim-safe -->
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\assets\icon.ico" Link="Assets\icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Wintainium.Core\Wintainium.Core.csproj" />
+  </ItemGroup>
+
+</Project>

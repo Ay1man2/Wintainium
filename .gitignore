@@ -13,3 +13,9 @@ wintainium-settings.json
 dist/
 *.exe
 installed-version.txt
+# .NET build output and editor files
+bin/
+obj/
+.vs/
+*.user
+TestResults/

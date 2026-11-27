@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The app's logic: no WPF, so it builds and its tests run on any OS.
+       Windows-only pieces (DPAPI, registry, Zone.Identifier) sit behind small interfaces. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Wintainium.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Wintainium.Tests" />
+  </ItemGroup>
+
+</Project>
