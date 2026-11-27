@@ -27,7 +27,7 @@ public sealed partial class AddApp
     /// <summary>What "install it now" put on disk, so a cancelled or failed add can take it away again.</summary>
     private Installed? installed;
 
-    private sealed record Installed(string Dir, bool CreatedDir, IReadOnlyList<string> Files, string Download, IReadOnlySet<string> FoldersBefore);
+    private sealed record Installed(string Dir, string? TopCreated, IReadOnlyList<string> Files, string Download, IReadOnlySet<string> FoldersBefore);
 
     public AddApp(InstallContext ctx, Updater updater, AppList list, string installRoot, Func<AppEntry, CancellationToken, Task<ReleaseInfo?>> latestRelease)
     {
@@ -308,7 +308,14 @@ public sealed partial class AddApp
         bool createdDir = !Directory.Exists(dir);
         var before = new HashSet<string>(createdDir ? [] : Directory.GetFiles(dir, "*", SearchOption.AllDirectories), StringComparer.OrdinalIgnoreCase);
         var foldersBefore = new HashSet<string>(createdDir ? [] : Directory.GetDirectories(dir, "*", SearchOption.AllDirectories), StringComparer.OrdinalIgnoreCase);
-        installed = new Installed(dir, createdDir, [], file, foldersBefore);
+        // the highest folder this add creates, so parents it made are tidied up too
+        string? topCreated = null;
+        for (string? d = Path.GetFullPath(dir); d is not null && !Directory.Exists(d); d = Path.GetDirectoryName(d))
+        {
+            topCreated = d;
+        }
+
+        installed = new Installed(dir, topCreated, [], file, foldersBefore);
         string method;
         IReadOnlyList<string> written;
         if (Archives.CanUnpack(file, ctx.SevenZip))
@@ -479,9 +486,16 @@ public sealed partial class AddApp
                     }
                 }
 
-                if (done.CreatedDir && !Directory.EnumerateFileSystemEntries(done.Dir).Any())
+                if (done.TopCreated is not null)
                 {
-                    Directory.Delete(done.Dir);
+                    for (string? d = Path.GetFullPath(done.Dir); d is not null && Directory.Exists(d) && !Directory.EnumerateFileSystemEntries(d).Any(); d = Path.GetDirectoryName(d))
+                    {
+                        Directory.Delete(d);
+                        if (string.Equals(d, done.TopCreated, StringComparison.OrdinalIgnoreCase))
+                        {
+                            break;
+                        }
+                    }
                 }
             }
         }
