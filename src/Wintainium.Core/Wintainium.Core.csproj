@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- the recognized-apps catalog, built in so the exe needs no files beside it -->
+    <EmbeddedResource Include="..\..\known-apps.json" LogicalName="Wintainium.known-apps.json" Link="Scan\known-apps.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
   </ItemGroup>
 
