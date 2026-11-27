@@ -55,6 +55,18 @@ public class ReleaseCacheTests
     }
 
     [Fact]
+    public void Cutting_notes_does_not_split_an_emoji()
+    {
+        using var dir = new TempDir();
+        ReleaseCache cache = ReleaseCache.Load(dir.File("c.json"));
+        string notes = new string('n', ReleaseCache.MaxNotes - 1) + "\U0001F600" + "tail";
+        cache.Set("X", new ReleaseInfo { Tag = "1", Notes = notes }, DateTime.UtcNow);
+        string cut = cache.Get("X")!.Release.Notes;
+        Assert.Equal(ReleaseCache.MaxNotes - 1, cut.Length);
+        Assert.False(char.IsHighSurrogate(cut[^1]));
+    }
+
+    [Fact]
     public void Long_notes_are_cut()
     {
         using var dir = new TempDir();
