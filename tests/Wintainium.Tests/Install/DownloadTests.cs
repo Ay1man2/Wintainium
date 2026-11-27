@@ -452,6 +452,7 @@ public sealed class DownloadTests : IDisposable
             .Where(f => File.ReadAllText(f).Contains(".OpenUrl(", StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .ToList();
-        Assert.Equal(["WebPage.cs"], callers);
+        // UiShell only hands an already-checked link on to the real shell on the window's thread
+        Assert.Equal(["UiShell.cs", "WebPage.cs"], callers.Order(StringComparer.Ordinal));
     }
 }

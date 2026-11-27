@@ -25,7 +25,7 @@ How to use it:
 - [ ] **D-04** Environment variables in `exe`, `launch`, `installDir` are expanded (`%APPDATA%` etc.). Source: `Get-AppRows`, `Start-App`, `Get-AppFolder`. Proof:
 - [ ] **D-05** App list written after Add app, Remove, scan add, and installedTag updates; other fields of every entry kept. Source: `Add-App`, `Remove-AppEntry`, `Add-ScanSelection`, `Save-InstalledTag`. Proof:
 - [x] **D-06** Settings `wintainium-settings.json`: `installRoot`, `downloadDir`, `setupDone`, `goldSelf`, `scanIgnore`; unreadable file treated as empty. Source: settings block, `Save-Settings`. Proof: `SettingsTests` (all)
-- [ ] **D-07** Default folders: installs `%USERPROFILE%\Wintainium\Apps`, downloads `%USERPROFILE%\Downloads\Wintainium`; settings override defaults. Source: `param`, settings block. Proof:
+- [x] **D-07** Default folders: installs `%USERPROFILE%\Wintainium\Apps`, downloads `%USERPROFILE%\Downloads\Wintainium`; settings override defaults. Source: `param`, settings block. Proof: `SessionTests.Folders_default_and_follow_settings`
 - [x] **D-08** Release cache `wintainium-cache.json`, keyed by app name: `Tag`, `Date`, `Page`, `Assets` (name + url), `Notes` (cut at 20,000 chars), `Fetched`; unreadable file treated as empty. Source: `Get-LatestCached`, `Save-Cache`. Proof: `ReleaseCacheTests` (all)
 - [x] **D-09** Legacy files `emu-apps.json`, `emu-cache.json`, `emu-token.xml` copied once to the new names when those don't exist. Source: startup block. Proof: `AppListTests.Legacy_files_are_copied_once`
 - [x] **D-10** Files written by Windows PowerShell 5.1 (UTF-8 with BOM) and 7 (without) are both read. Source: n/a (compatibility). Proof: `AppListTests.Reads_utf8_with_and_without_bom`, `ReleaseCacheTests.Reads_what_PowerShell_wrote`
@@ -119,19 +119,19 @@ How to use it:
 
 ## 9. Other row actions
 
-- [ ] **R-01** Launch: starts `launch` or the exe in its folder; non-program files (mods) open their folder instead; "Not found" messages. Source: `Start-App`. Proof:
-- [ ] **R-02** Open folder: opens the app folder in Explorer, or "Folder not found". Source: `BtnFolder`, context menu. Proof:
-- [ ] **R-03** Release page: opens the page, or "No release page is set for <app>". Source: `BtnPage`. Proof:
-- [ ] **R-04** Remove from list: asks first (files stay), removes the entry and its cache, logs it. Source: `Remove-AppEntry`. Proof:
-- [ ] **R-05** No row selected: "Select an app in the list first." Source: `Get-Selected`. Proof:
+- [x] **R-01** Launch: starts `launch` or the exe in its folder; non-program files (mods) open their folder instead; "Not found" messages. Source: `Start-App`. Proof: `SessionTests.Launch_starts_the_exe_in_its_folder`, `Launch_prefers_the_launch_field`, `Launch_of_a_mod_opens_its_folder`, `Launch_of_a_missing_exe_says_not_found`
+- [x] **R-02** Open folder: opens the app folder in Explorer, or "Folder not found". Source: `BtnFolder`, context menu. Proof: `SessionTests.Open_folder_or_says_it_is_missing_unless_quiet`
+- [x] **R-03** Release page: opens the page, or "No release page is set for <app>". Source: `BtnPage`. Proof: `SessionTests.Release_page_opens_or_says_none_is_set`, `Release_page_never_opens_a_non_https_link`
+- [x] **R-04** Remove from list: asks first (files stay), removes the entry and its cache, logs it. Source: `Remove-AppEntry`. Proof: `SessionTests.Remove_asks_then_drops_the_entry_and_its_cache_but_not_files`
+- [x] **R-05** No row selected: "Select an app in the list first." Source: `Get-Selected`. Proof: `SessionTests.No_selection_says_so`
 
 ## 10. Main window
 
 - [ ] **M-01** Title "Wintainium <version>", app icon, 1120x740, minimum 820x480, centred. Source: `$mainXaml`. Proof:
 - [ ] **M-02** Header "Wintainium" and summary line: "All N apps are up to date - checked HH:mm" (green) or "N updates available - N need attention - N apps - checked HH:mm" (amber when updates, red when only problems). Source: `Update-Grid`. Proof:
 - [ ] **M-03** Toolbar in this order with these icons: Update selected (primary), Update all, What's new, Launch, Release page, Open folder, Add app, Refresh, Re-check all (tooltip), Scan (tooltip), Setup (tooltip). Source: `$mainXaml`. Proof:
-- [ ] **M-04** Search box with "Search apps..." hint; filters by name, case-insensitive. Source: `Test-RowVisible`, `Update-Filter`. Proof:
-- [ ] **M-05** "Only show updates" hides rows that are up to date. Source: `Test-RowVisible`. Proof:
+- [ ] **M-04** Search box with "Search apps..." hint; filters by name, case-insensitive. Source: `Test-RowVisible`, `Update-Filter`. Proof: filter: `SessionTests.Search_and_only_updates_filter_rows`; hint: PC check pending
+- [x] **M-05** "Only show updates" hides rows that are up to date. Source: `Test-RowVisible`. Proof: `SessionTests.Search_and_only_updates_filter_rows`, `Only_updates_keeps_rows_that_need_attention`
 - [ ] **M-06** Hint text "Double-click to update - right-click for more - F5 to refresh". Source: `$mainXaml`. Proof:
 - [ ] **M-07** Grid: columns App, Status, Installed, Latest (ellipsis + tooltip), Released, Update via; single row selection; read-only; alternating row colours; selection kept across refreshes. Source: `$mainXaml`, `Update-Grid`. Proof:
 - [ ] **M-08** Status pills: UPDATE amber, up to date green, lookup failed / rate limited / token rejected / exe not found red, site busy orange, others grey. Source: `$mainXaml`. Proof:
@@ -150,13 +150,13 @@ How to use it:
 - [ ] **K-03** Delete (grid focused) = remove from list (asks first). Source: `KeyDown`. Proof:
 - [ ] **K-04** Right-click selects the row under the mouse, then opens the menu. Source: `PreviewMouseRightButtonDown`. Proof:
 - [ ] **K-05** Menu: Update, What's new, Launch, separator, Open release page, Open folder, separator, Remove from list... Source: context menu. Proof:
-- [ ] **K-06** "Show Wintainium in gold" (checkable) only on the self row; saves `goldSelf` and updates the row at once. Source: context menu. Proof:
+- [ ] **K-06** "Show Wintainium in gold" (checkable) only on the self row; saves `goldSelf` and updates the row at once. Source: context menu. Proof: saving: `SessionTests.Gold_is_saved_and_applied_to_the_self_row`; menu: PC check pending
 
 ## 12. Dialogs
 
-- [ ] **G-01** Prompt dialog: last 12 log lines as context (hidden when none), question, Yes/No buttons for yes/no questions (Stop as a third when offered), text box with OK (default) / Cancel otherwise, focus in the text box. Source: `Show-Prompt`. Proof:
+- [ ] **G-01** Prompt dialog: last 12 log lines as context (hidden when none), question, Yes/No buttons for yes/no questions (Stop as a third when offered), text box with OK (default) / Cancel otherwise, focus in the text box. Source: `Show-Prompt`. Proof: answers: `SessionTests.Typed_choices_are_read_like_v030`, `Closing_the_choice_dialog_cancels`; window: PC check pending
 - [ ] **G-02** Every question asked today has a dialog with the same text (prompt list below). Source: `Read-Host` calls. Proof:
-- [ ] **G-03** What's new: title "<app>  <latest>", "Released <date> - you have <installed>", notes with markdown `**` and `#` stripped, Open release page, Close (Esc). Fallback texts when there are no notes. Source: `Show-Notes`, `Get-NotesText`. Proof:
+- [ ] **G-03** What's new: title "<app>  <latest>", "Released <date> - you have <installed>", notes with markdown `**` and `#` stripped, Open release page, Close (Esc). Fallback texts when there are no notes. Source: `Show-Notes`, `Get-NotesText`. Proof: text: `SessionTests.Notes_strip_markdown_and_show_the_dates`, `Notes_fall_back_when_there_are_none`; window: PC check pending
 
 Questions asked today (all become dialogs):
 
@@ -243,10 +243,10 @@ Decided for v0.4.0 (see port plan): keep the window as the main way in, and a fe
 who know what they're doing.
 
 - [ ] **L-01** `Wintainium.exe` with no arguments opens the window. Source: L, `gui`. Proof:
-- [ ] **L-02** `--list` prints the table (App, Status, Installed, Latest, Released, Update via, number of updates, lookup notes) to the console it was started from. Source: `list`, `Show-Table`. Proof:
+- [ ] **L-02** `--list` prints the table (App, Status, Installed, Latest, Released, Update via, number of updates, lookup notes) to the console it was started from. Source: `list`, `Show-Table`. Proof: table: `SessionTests.Table_matches_the_v030_layout`; console output: PC check pending
 - [ ] **L-03** `--setup` opens the window with the setup wizard first. Source: `setup`. Proof:
 - [ ] **L-04** `--uninstall` and `--install-only` (I-06, I-07). Source: L. Proof:
-- [ ] **L-05** `--data <folder>` uses the data files in that folder (replaces `-Config`). Source: `-Config`. Proof:
+- [x] **L-05** `--data <folder>` uses the data files in that folder (replaces `-Config`). Source: `-Config`. Proof: `SessionTests.Options_are_read`, `Bad_options_are_explained`
 - [ ] **L-06** Grace days and cache minutes kept as optional settings keys (defaults 3 and 60), replacing `-GraceDays` and `-CacheMinutes`. Source: `param`. Proof:
 - [ ] **L-07** EmuDeck location: default `%LOCALAPPDATA%\Programs\EmuDeck\EmuDeck.exe` (replaces `-EmuDeckExe`). Source: `param`. Proof:
 
