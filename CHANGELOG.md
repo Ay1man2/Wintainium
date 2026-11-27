@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- README brought up to date with v0.3.0: the four release files and how to check a download's SHA-256, a separate Updating and uninstalling section (including portable folders and git clones), safe download names and https-only links in Features, and a Security section pointing to private vulnerability reporting. The "How it was built" section was removed.
+
 ## v0.3.0 - 2026-11-27
 
 ### Added
