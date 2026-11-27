@@ -35,6 +35,17 @@ public static partial class GitHubTokenCheck
     /// <summary>GitHub's page for a new classic token, with the description filled in and no scopes (T-08).</summary>
     public const string TokenPageUrl = "https://github.com/settings/tokens/new?description=Wintainium%20(read-only%2C%20no%20scopes)&scopes=";
 
+    /// <summary>How long the check may take before it counts as a network problem.</summary>
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
+
+    public const string RejectedMessage = "GitHub did not accept this token. It may be mistyped, expired or deleted.";
+
+    public const string NetworkMessage = "Could not reach GitHub to check the token. Check your internet connection and try again.";
+
+    /// <summary>
+    /// Checks a token. Throws <see cref="OperationCanceledException"/> only when <paramref name="cancel"/>
+    /// was cancelled; a network failure or timeout is reported in the result, not blamed on the token.
+    /// </summary>
     public static async Task<TokenCheckResult> CheckAsync(HttpClient http, string? token, CancellationToken cancel = default)
     {
         ArgumentNullException.ThrowIfNull(http);
@@ -45,27 +56,45 @@ public static partial class GitHubTokenCheck
         }
 
         bool fine = plain.StartsWith("github_pat_", StringComparison.Ordinal);
-        HttpResponseMessage resp;
+        cancel.ThrowIfCancellationRequested();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        timeout.CancelAfter(Timeout);
+        HttpResponseMessage? resp = null;
         string body;
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, RateLimitUrl);
             req.Headers.UserAgent.ParseAdd("Wintainium");
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", plain);
-            resp = await http.SendAsync(req, cancel).ConfigureAwait(false);
-            body = await resp.Content.ReadAsStringAsync(cancel).ConfigureAwait(false);
+            resp = await http.SendAsync(req, timeout.Token).ConfigureAwait(false);
+            if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                resp.Dispose();
+                return new TokenCheckResult { FineGrained = fine, Message = RejectedMessage };
+            }
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                int code = (int)resp.StatusCode;
+                resp.Dispose();
+                return new TokenCheckResult { FineGrained = fine, Message = $"GitHub could not check the token right now (HTTP {code}). Try again later." };
+            }
+
+            body = await resp.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
-            return new TokenCheckResult { FineGrained = fine, Message = "GitHub did not accept this token. It may be mistyped, expired or deleted." };
+            resp?.Dispose();
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
+        {
+            resp?.Dispose();
+            return new TokenCheckResult { FineGrained = fine, Message = NetworkMessage };
         }
 
         using (resp)
         {
-            if (!resp.IsSuccessStatusCode)
-            {
-                return new TokenCheckResult { FineGrained = fine, Message = "GitHub did not accept this token. It may be mistyped, expired or deleted." };
-            }
 
             int limit = 0;
             try

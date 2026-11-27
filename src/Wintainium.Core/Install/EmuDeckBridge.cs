@@ -14,7 +14,7 @@ public static partial class EmuDeckBridge
         return Path.Combine(ctx.EmuDeckData, "backend", "functions", "all.ps1");
     }
 
-    /// <summary>EmuDeck install functions look like yuzu_install; anything else is refused (X-06).</summary>
+    /// <summary>EmuDeck install functions look like PCSX2QT_install; anything else is refused (X-06).</summary>
     public static bool IsInstallFunction(string name) => FunctionName().IsMatch(name ?? "");
 
     public static void Open(IReadOnlyList<string> names, InstallContext ctx)
@@ -50,7 +50,7 @@ public static partial class EmuDeckBridge
 
         if (!IsInstallFunction(fn))
         {
-            log.Write($"  \"{fn}\" isn't an EmuDeck install function (they look like yuzu_install), so it wasn't run. Check emudeckFn in wintainium-apps.json.", LogColor.Red);
+            log.Write($"  \"{fn}\" isn't an EmuDeck install function (they look like PCSX2QT_install), so it wasn't run. Check emudeckFn in wintainium-apps.json.", LogColor.Red);
             return;
         }
 

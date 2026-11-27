@@ -27,7 +27,11 @@ public static class LookupNotes
         {
             // PowerShell's [int] rounds half to even
             int left = (int)Math.Round((exp - now).TotalDays, MidpointRounding.ToEven);
-            if (left <= 7)
+            if (exp <= now)
+            {
+                log.Write($"Your GitHub token has expired. {TokenHint}", LogColor.Yellow);
+            }
+            else if (left <= 7)
             {
                 log.Write($"Your GitHub token expires in about {left} day(s). {TokenHint}", LogColor.Yellow);
             }

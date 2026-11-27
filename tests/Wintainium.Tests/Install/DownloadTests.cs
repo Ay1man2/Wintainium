@@ -295,6 +295,104 @@ public sealed class DownloadTests : IDisposable
         Assert.Contains("Run as administrator to see the detection name", rig.Log.AllText, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("system.text.json")]
+    [InlineData("win32")]
+    [InlineData("invalid")]
+    public async Task Quarantine_help_goes_on_when_the_detection_query_fails(string kind)
+    {
+        Exception ex = kind switch
+        {
+            "system.text.json" => new System.Text.Json.JsonException("bad"),
+            "win32" => new System.ComponentModel.Win32Exception(2),
+            _ => new InvalidOperationException("no"),
+        };
+        rig.Threats = new FakeThreats(null, fails: ex);
+        await QuarantineHelp.ShowAsync([], "x.zip", rig.Rebuild(), new Downloader(rig.Ctx));
+        Assert.Contains("Could not read the detection name", rig.Log.AllText, StringComparison.Ordinal);
+        Assert.Contains("Do not use \"Allow on device\"", rig.Log.AllText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("#< CLIXML\r\n<Objs Version=\"1.1.0.1\"><Obj S=\"progress\" RefId=\"0\"></Obj></Objs>", false)]
+    [InlineData("#< CLIXML\r\n<Objs Version=\"1.1.0.1\"><S S=\"Error\">Access denied</S></Objs>", true)]
+    [InlineData("Get-MpThreatDetection : Access denied", true)]
+    public void Defender_progress_text_is_not_an_error(string stderr, bool error) =>
+        Assert.Equal(error, PowerShellStderr.IsError(stderr));
+
+    [Fact]
+    public async Task A_file_removed_as_the_download_ends_is_reported_not_crashed()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return; // Windows won't let the file be deleted while it is still being written
+        }
+
+        string target = DlFile("vanish.zip");
+        var http = new FakeHttp().On(Base + "vanish.zip", _ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new VanishingStream(Payload, target)),
+        });
+        using var rig2 = new InstallRig(http);
+        Directory.CreateDirectory(rig.Ctx.DownloadDir);
+        var ctx = new InstallContext
+        {
+            Http = rig2.Client, Log = rig.Log, Prompts = rig.Prompts, Shell = rig.Shell, Mark = rig.Mark, Threats = rig.Threats,
+            Processes = rig.Runner, DownloadDir = rig.Ctx.DownloadDir, EmuDeckExe = rig.Ctx.EmuDeckExe, EmuDeckData = rig.Ctx.EmuDeckData,
+            TempDir = rig.Ctx.TempDir, Delay = (_, _) => Task.CompletedTask, Now = () => rig.Now,
+        };
+        Assert.Equal(DownloadOutcome.Removed, await new Downloader(ctx).SaveAsync(Base + "vanish.zip", target, "vanish.zip"));
+        Assert.Empty(rig.Mark.Marks);
+    }
+
+    [WindowsFact]
+    public async Task A_locked_earlier_download_is_a_failed_download()
+    {
+        string file = DlFile(Zip.Name);
+        Directory.CreateDirectory(rig.Ctx.DownloadDir);
+        await File.WriteAllTextAsync(file, "old");
+        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Equal(DownloadOutcome.Failed, await new Downloader(rig.Ctx).SaveAsync(Zip.Url, file, Zip.Name));
+        }
+
+        Assert.Contains("Download failed", rig.Log.AllText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("HASH  app.zip", true)]
+    [InlineData("HASH *app.zip", true)]
+    [InlineData("HASH  dist/app.zip", true)]
+    [InlineData("SHA256 (app.zip) = HASH", true)]
+    [InlineData("app.zip: HASH", true)]
+    [InlineData("HASH  myapp.zip", false)]
+    [InlineData("HASH  app.zip.sig", false)]
+    public void Checksum_lists_match_the_whole_file_name(string line, bool listed) =>
+        Assert.Equal(listed, Checksums.Lists(line.Replace("HASH", Hash, StringComparison.Ordinal), "app.zip"));
+
+    [Fact]
+    public void Checksum_list_names_with_spaces_match()
+    {
+        Assert.True(Checksums.Lists(Hash + "  My App 1.2.zip", "My App 1.2.zip"));
+        Assert.False(Checksums.Lists(Hash + "  NotMy App 1.2.zip", "My App 1.2.zip"));
+    }
+
+    /// <summary>A body that deletes the file it is being saved to when it ends, as Windows Security can.</summary>
+    private sealed class VanishingStream(byte[] data, string file) : MemoryStream(data)
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            ValueTask<int> r = base.ReadAsync(buffer, cancellationToken);
+            if (r.IsCompleted && r.Result == 0)
+            {
+                File.Delete(file);
+            }
+
+            return r;
+        }
+    }
+
     [Fact(DisplayName = "late quarantine: no crash; reported as removed")]
     public async Task Late_quarantine_reported()
     {

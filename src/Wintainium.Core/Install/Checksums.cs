@@ -47,7 +47,7 @@ public static partial class Checksums
             return new PublishedHash(sum.Name, null, $"Could not read {sum.Name}");
         }
 
-        string? line = perFile ? text : text.Split('\n').FirstOrDefault(l => l.Contains(name, StringComparison.OrdinalIgnoreCase));
+        string? line = perFile ? text : text.Split('\n').FirstOrDefault(l => Lists(l, name));
         Match m = line is null ? Match.Empty : Sha256().Match(line);
         return m.Success
             ? new PublishedHash(sum.Name, m.Groups[1].Value.ToLowerInvariant(), null)
@@ -109,6 +109,43 @@ public static partial class Checksums
         log.Write($"    expected {p.Hash}", LogColor.Red);
         log.Write($"    got      {actual}", LogColor.Red);
         return ChecksumOutcome.Bad;
+    }
+
+    /// <summary>
+    /// True when a checksum-list line names exactly this file, as a whole field: "hash  name",
+    /// "hash *name", "SHA256 (name) = hash" or "name: hash", with or without a folder in front.
+    /// A substring is not enough: app.zip must not match the line for myapp.zip (the download is
+    /// deleted on a mismatch).
+    /// </summary>
+    internal static bool Lists(string line, string name)
+    {
+        // the name as the end of the line, so names with spaces work too
+        string t = line.TrimEnd('\r', ' ', '\t');
+        if (t.EndsWith(name, StringComparison.OrdinalIgnoreCase))
+        {
+            int before = t.Length - name.Length - 1;
+            if (before < 0 || t[before] is ' ' or '\t' or '*' or '/' or '\\')
+            {
+                return true;
+            }
+        }
+
+        foreach (string field in line.Split([' ', '\t', '\r'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            string f = field.TrimStart('*', '(').TrimEnd(')', ':', ',');
+            int slash = f.LastIndexOfAny(['/', '\\']);
+            if (slash >= 0)
+            {
+                f = f[(slash + 1)..];
+            }
+
+            if (string.Equals(f, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     [GeneratedRegex(@"^(sha256sums|checksums?|sha256|hashes)(\.txt|\.sha256)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

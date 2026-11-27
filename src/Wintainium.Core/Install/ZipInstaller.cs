@@ -39,9 +39,8 @@ public static partial class ZipInstaller
             return false;
         }
 
-        string backup = BackupName(dir, ctx.Now());
         log.Write($"  This will back up {dir}");
-        log.Write($"                 to {backup}");
+        log.Write($"                 to {BackupName(dir, ctx.Now())}");
         log.Write("  and then unpack the new files over the original folder.");
         if (!ctx.Prompts.Confirm("Continue?"))
         {
@@ -49,35 +48,74 @@ public static partial class ZipInstaller
             return false;
         }
 
-        bool hadFolder = Directory.Exists(dir);
-        if (hadFolder)
+        // The archive decides which folder is written (X-08 can move one level up), so the backup
+        // is made of that folder, after unpacking to a temporary folder and before copying.
+        string target = dir;
+        string? backup = null;
+        bool hadFolder = false;
+        bool Prepare(string into)
         {
-            Archives.CopyTree(dir, backup);
+            target = into;
+            hadFolder = Directory.Exists(into);
+            if (!hadFolder)
+            {
+                return true;
+            }
+
+            string name = BackupName(into, ctx.Now());
+            if (!string.Equals(into, dir, StringComparison.OrdinalIgnoreCase))
+            {
+                log.Write($"  The archive holds the whole app folder, so the backup is of {into}");
+                log.Write($"                 to {name}");
+            }
+
+            try
+            {
+                Archives.CopyTree(into, name);
+                backup = name;
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Archives.TryDeleteTree(name);
+                log.Write($"  Could not back up {into}: {ex.Message}", LogColor.Red);
+                log.Write("  Nothing was changed. Close any program using that folder and try again.", LogColor.Red);
+                return false;
+            }
         }
 
-        UnpackResult unpacked;
+        UnpackResult? unpacked;
         try
         {
             string exeName = app.InstallDir.Length > 0 ? "" : Path.GetFileName(exe);
-            unpacked = await Archives.ExpandAsync(file, dir, ctx, exeName, cancel).ConfigureAwait(false);
+            unpacked = await Archives.ExpandAsync(file, dir, ctx, exeName, Prepare, cancel).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is UnsafeArchiveException or InvalidDataException or IOException or UnauthorizedAccessException)
         {
             log.Write($"  {ex.Message}", LogColor.Red);
-            log.Write($"  The backup is at {backup}");
+            if (backup is not null)
+            {
+                log.Write($"  The backup is at {backup}");
+            }
+
             return false;
         }
 
-        log.Write($"  Done. If anything is wrong, delete {dir} and rename the backup back.", LogColor.Green);
+        if (unpacked is null)
+        {
+            return false;
+        }
+
+        log.Write($"  Done. If anything is wrong, delete {target} and rename the backup back.", LogColor.Green);
         if (app.Hint.Length > 0)
         {
             log.Write($"  Then: {app.Hint}");
         }
 
-        PruneBackups(dir, ctx.BackupsToKeep, log);
+        PruneBackups(target, ctx.BackupsToKeep, log);
         if (hadFolder)
         {
-            ReportLeftovers(app, dir, Leftovers(dir, unpacked.Files), ctx);
+            ReportLeftovers(app, target, Leftovers(target, unpacked.Files), ctx);
         }
 
         return true;
@@ -165,7 +203,7 @@ public static partial class ZipInstaller
         string leaf = Path.GetFileName(trimmed);
         var backups = Directory.GetDirectories(parent, leaf + ".backup-*")
             .Where(d => BackupSuffix().IsMatch(Path.GetFileName(d)[(leaf.Length + ".backup-".Length)..]))
-            .OrderByDescending(d => Path.GetFileName(d), StringComparer.Ordinal)
+            .OrderByDescending(d => BackupOrder(Path.GetFileName(d)[(leaf.Length + ".backup-".Length)..]))
             .ToList();
         var removed = new List<string>();
         foreach (string old in backups.Skip(Math.Max(keep, 1)))
@@ -179,6 +217,15 @@ public static partial class ZipInstaller
         }
 
         return removed;
+    }
+
+    /// <summary>yyyyMMdd-HHmm[-n] as a number that sorts by time, then by counter (so -10 comes after -9).</summary>
+    private static (long Stamp, int Counter) BackupOrder(string suffix)
+    {
+        long stamp = long.Parse(suffix[..8] + suffix[9..13], CultureInfo.InvariantCulture);
+        int counter = suffix.Length <= 13 ? 1
+            : int.TryParse(suffix[14..], NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : int.MaxValue;
+        return (stamp, counter);
     }
 
     [GeneratedRegex(@"^\d{8}-\d{4}(-\d+)?$")]

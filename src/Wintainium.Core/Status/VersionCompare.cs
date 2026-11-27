@@ -36,7 +36,10 @@ public static partial class VersionCompare
     /// Same numbering scheme (same major, and for x.y.z the same minor too): the numbers decide.
     /// Different scheme (X-09): v0.3.0 always fell back to the date, so 2.9.181 -> 3.0.0 could
     /// show "up to date". Now a real installed version (not a placeholder like 1.0.0.0) that is
-    /// lower than the release counts as older; anything else still falls back to the date.
+    /// lower than the release counts as older, but only when the two clearly use the same kind of
+    /// numbering: neither or both are date-style (a major of 1000 or more, like 2024.11.1), and the
+    /// majors are at most <see cref="MaxMajorGap"/> apart. Anything else still falls back to the date,
+    /// so an exe versioned 1.2.3 with releases tagged 2024.11.1 isn't shown as UPDATE forever.
     /// </summary>
     public static bool? IsOlder(string installed, string release)
     {
@@ -61,7 +64,8 @@ public static partial class VersionCompare
         }
 
         bool placeholder = va.Minor == 0 && Math.Max(va.Build, 0) == 0 && Math.Max(va.Revision, 0) == 0;
-        if (!placeholder && pa < pb)
+        bool similar = IsDateStyle(va) == IsDateStyle(vb) && Math.Abs(vb.Major - va.Major) <= MaxMajorGap;
+        if (!placeholder && similar && pa < pb)
         {
             return true;
         }
@@ -86,6 +90,11 @@ public static partial class VersionCompare
 
         return Pad(va) < Pad(vb);
     }
+
+    /// <summary>Largest major-version step still treated as the same numbering scheme.</summary>
+    public const int MaxMajorGap = 3;
+
+    private static bool IsDateStyle(Version v) => v.Major >= 1000;
 
     private static Version Pad(Version v) => new(v.Major, v.Minor, Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
 

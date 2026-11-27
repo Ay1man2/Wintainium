@@ -103,6 +103,40 @@ public class ReleaseSourcesTests
     }
 
     [Fact]
+    public async Task Dolphin_notes_decode_every_entity_once()
+    {
+        const string api = "https://dolphin-emu.org/update/latest/beta/";
+        var http = new FakeHttp().OnJson(api, """{ "shortrev": "1", "changelog_html": "<p>a &lt;b&gt; &amp;lt; c</p>" }""");
+        using HttpClient client = http.Client();
+        ReleaseInfo r = (await new ReleaseSources(client).GetLatestAsync(App($$"""{ "source": "dolphin", "api": "{{api}}" }""")))!;
+        Assert.Equal("a <b> &lt; c", r.Notes);
+    }
+
+    [Fact]
+    public async Task GitHub_tag_and_repo_are_escaped_in_the_address()
+    {
+        var http = new FakeHttp().OnJson("https://api.github.com/repos/o/ok/releases/tags/v1%231%3Fx%2Fy",
+            """{ "tag_name": "v1#1?x/y", "html_url": "https://x", "assets": [] }""");
+        using HttpClient client = http.Client();
+        ReleaseInfo r = (await new ReleaseSources(client).GetLatestAsync(App("""{ "source": "github", "repo": "o/ok", "tag": "v1#1?x/y" }""")))!;
+        Assert.Equal("v1#1?x/y", r.Tag);
+        Assert.Single(http.Requests);
+    }
+
+    [Theory]
+    [InlineData("justaname")]
+    [InlineData("o/n/extra")]
+    [InlineData("o/..")]
+    [InlineData("/n")]
+    public async Task GitHub_repo_must_be_owner_slash_name(string repo)
+    {
+        var http = new FakeHttp();
+        using HttpClient client = http.Client();
+        await Assert.ThrowsAsync<LookupException>(() => new ReleaseSources(client).GetLatestAsync(App($$"""{ "source": "github", "repo": "{{repo}}" }""")));
+        Assert.Empty(http.Requests);
+    }
+
+    [Fact]
     public async Task Manual_source_is_not_looked_up()
     {
         var http = new FakeHttp();

@@ -139,6 +139,9 @@ public sealed class ZoneIdentifierMark : IFileMark
 /// <summary>Starts a program and waits, calling back on a timer.</summary>
 public sealed class ProcessRunner : IProcessRunner
 {
+    /// <summary>Told the process ID once it started (for tests).</summary>
+    internal Action<int>? Started { get; init; }
+
     public async Task<ProcessOutcome> RunAsync(string file, IReadOnlyList<string> arguments, Action tick, TimeSpan tickEvery, CancellationToken cancel = default)
     {
         ArgumentNullException.ThrowIfNull(arguments);
@@ -158,16 +161,42 @@ public sealed class ProcessRunner : IProcessRunner
         // Windows PowerShell must not pick up this process's module path
         psi.Environment.Remove("PSModulePath");
         using Process p = Process.Start(psi) ?? throw new InvalidOperationException($"Could not start {file}");
-        Task<string> errors = p.StandardError.ReadToEndAsync(cancel);
-        Task<string> output = p.StandardOutput.ReadToEndAsync(cancel);
-        Task exited = p.WaitForExitAsync(cancel);
-        while (await Task.WhenAny(exited, Task.Delay(tickEvery, cancel)).ConfigureAwait(false) != exited)
+        Started?.Invoke(p.Id);
+        Task<string> errors = p.StandardError.ReadToEndAsync(CancellationToken.None);
+        Task<string> output = p.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        Task exited = p.WaitForExitAsync(CancellationToken.None);
+        try
         {
-            tick();
+            while (await Task.WhenAny(exited, Task.Delay(tickEvery, cancel)).ConfigureAwait(false) != exited)
+            {
+                cancel.ThrowIfCancellationRequested();
+                tick();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancel stops the work too: 7-Zip, or EmuDeck's PowerShell and whatever it started
+            KillTree(p);
+            throw;
         }
 
         await exited.ConfigureAwait(false);
         await output.ConfigureAwait(false);
         return new ProcessOutcome(p.ExitCode, (await errors.ConfigureAwait(false)).Trim());
+    }
+
+    internal static void KillTree(Process p)
+    {
+        try
+        {
+            if (!p.HasExited)
+            {
+                p.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            // it ended on its own in the meantime
+        }
     }
 }

@@ -51,7 +51,8 @@ public sealed class ReleaseLookup
             c = cache.Get(app.Name);
         }
 
-        if (!force && c?.FetchedUtc is DateTime fetched && (utcNow() - fetched).TotalMinutes < CacheMinutes)
+        // a fetch time in the future (clock changed) counts as stale
+        if (!force && c?.FetchedUtc is DateTime fetched && (utcNow() - fetched) is { TotalMinutes: >= 0 } age && age.TotalMinutes < CacheMinutes)
         {
             return new LookupResult { Release = c.Release };
         }
@@ -61,8 +62,10 @@ public sealed class ReleaseLookup
         {
             release = await sources.GetLatestAsync(app, cancel).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is LookupException or HttpRequestException or System.Text.RegularExpressions.RegexMatchTimeoutException or ArgumentException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancel.IsCancellationRequested)
         {
+            // Any failure is this app's alone, as in v0.3.0: it shows a status, and the other
+            // lookups and the cache save go on.
             string reason = LookupStatus.For(ex, app);
             if (c is not null && c.Release.Tag.Length > 0)
             {
@@ -115,10 +118,16 @@ public sealed class ReleaseLookup
                 }
             })
             .ToList();
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-        lock (gate)
+        try
         {
-            cache.Save();
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (gate)
+            {
+                cache.Save();
+            }
         }
 
         return results;

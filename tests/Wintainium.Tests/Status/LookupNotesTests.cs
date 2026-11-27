@@ -79,6 +79,14 @@ public class LookupNotesTests
     }
 
     [Fact]
+    public void Expired_token_says_it_has_expired()
+    {
+        string text = Notes([GhOk], Now.AddDays(-3));
+        Assert.Contains("Your GitHub token has expired.", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-3 day", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Summary_all_up_to_date()
     {
         (string text, StatusSummary.Tone tone) = StatusSummary.For([GhOk], new DateTime(2026, 11, 27, 9, 5, 0));
