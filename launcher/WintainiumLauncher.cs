@@ -128,25 +128,13 @@ static class Launcher
         return MatchesPayload(here);
     }
 
-    // A git clone has a .git folder. A worktree or submodule has a .git file that says
-    // "gitdir: <path>" instead, and that path must be a real git folder. A downloaded file named
-    // ".git" can't make a folder look like a clone.
+    // A git clone has a .git folder with HEAD in it. A .git *file* (git worktrees and submodules
+    // use one, saying "gitdir: <path>") is not trusted: a website can drop a file named .git into
+    // Downloads, and the path inside it could be a network share or any other repo on this PC.
+    // Worktrees and submodules start the installed copy instead.
     static bool IsGitCheckout(string here)
     {
-        string git = Path.Combine(here, ".git");
-        if (Directory.Exists(git)) return LooksLikeGitDir(git);
-        if (!File.Exists(git)) return false;
-        try
-        {
-            if (new FileInfo(git).Length > 4096) return false;
-            string text = File.ReadAllText(git).Trim();
-            if (!text.StartsWith("gitdir:", StringComparison.Ordinal)) return false;
-            string target = text.Substring("gitdir:".Length).Trim();
-            if (target.Length == 0) return false;
-            if (!Path.IsPathRooted(target)) target = Path.Combine(here, target);
-            return LooksLikeGitDir(target);
-        }
-        catch { return false; }
+        return LooksLikeGitDir(Path.Combine(here, ".git"));
     }
 
     static bool LooksLikeGitDir(string dir)
