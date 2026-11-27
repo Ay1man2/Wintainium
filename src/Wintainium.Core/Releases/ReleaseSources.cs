@@ -99,10 +99,16 @@ public sealed partial class ReleaseSources
 
     private async Task<ReleaseInfo> GitHubAsync(AppEntry app, CancellationToken cancel)
     {
-        string baseUrl = $"https://api.github.com/repos/{app.Repo}";
+        string[] parts = app.Repo.Split('/');
+        if (parts.Length != 2 || parts[0].Length == 0 || parts[1].Length == 0 || parts.Any(p => p is "." or ".."))
+        {
+            throw new LookupException($"repo must look like owner/name, not \"{app.Repo}\"");
+        }
+
+        string baseUrl = $"https://api.github.com/repos/{Uri.EscapeDataString(parts[0])}/{Uri.EscapeDataString(parts[1])}";
         if (app.Tag.Length > 0)
         {
-            JsonNode? r = await GetJsonAsync($"{baseUrl}/releases/tags/{app.Tag}", cancel, gitHub: true).ConfigureAwait(false);
+            JsonNode? r = await GetJsonAsync($"{baseUrl}/releases/tags/{Uri.EscapeDataString(app.Tag)}", cancel, gitHub: true).ConfigureAwait(false);
             return FromGiteaOrGitHub(r, useAssetDates: true);
         }
 
@@ -202,11 +208,8 @@ public sealed partial class ReleaseSources
             }
         }
 
-        string notes = TagRegex().Replace(d.GetString("changelog_html"), "")
-            .Replace("&amp;", "&", StringComparison.OrdinalIgnoreCase)
-            .Replace("&quot;", "\"", StringComparison.OrdinalIgnoreCase)
-            .Replace("&#39;", "'", StringComparison.OrdinalIgnoreCase)
-            .Trim();
+        // v0.3.0 decoded only &amp; &quot; &#39; (and &amp; first); decode every entity once
+        string notes = System.Net.WebUtility.HtmlDecode(TagRegex().Replace(d.GetString("changelog_html"), "")).Trim();
         return new ReleaseInfo
         {
             Tag = d.GetString("shortrev"),

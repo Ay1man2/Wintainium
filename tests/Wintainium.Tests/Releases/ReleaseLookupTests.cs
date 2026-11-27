@@ -184,6 +184,51 @@ public class ReleaseLookupTests
     }
 
     [Fact]
+    public async Task One_unexpected_failure_does_not_lose_the_others_or_the_cache()
+    {
+        var http = Network().On("https://api.github.com/repos/o/broken/releases/latest", _ => throw new InvalidOperationException("odd charset"));
+        using HttpClient client = http.Client();
+        (ReleaseLookup lookup, ReleaseCache cache, TempDir dir) = Make(client, Now);
+        using (dir)
+        {
+            IReadOnlyDictionary<AppEntry, LookupResult> all = await lookup.LookupAllAsync([Broken, GhOk], false);
+            Assert.Equal(Statuses.LookupFailed, all[Broken].FailureStatus);
+            Assert.Equal("v1.0", all[GhOk].Release!.Tag);
+            Assert.Equal("v1.0", ReleaseCache.Load(cache.FilePath).Get("GhOk")!.Release.Tag);
+        }
+    }
+
+    [Fact]
+    public async Task Cancelling_still_saves_what_was_found()
+    {
+        var http = Network();
+        using HttpClient client = http.Client();
+        (ReleaseLookup lookup, ReleaseCache cache, TempDir dir) = Make(client, Now);
+        using (dir)
+        {
+            await lookup.LookupAsync(GhOk, false);
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => lookup.LookupAllAsync([GhOk, Limited], true, cancel: cts.Token));
+            Assert.NotNull(ReleaseCache.Load(cache.FilePath).Get("GhOk"));
+        }
+    }
+
+    [Fact]
+    public async Task A_fetch_time_in_the_future_counts_as_stale()
+    {
+        var http = Network();
+        using HttpClient client = http.Client();
+        DateTime now = Now;
+        using var dir = new TempDir();
+        var lookup = new ReleaseLookup(new ReleaseSources(client), ReleaseCache.Load(dir.File("c.json")), 60, () => now);
+        await lookup.LookupAsync(GhOk, false);
+        now = now.AddHours(-3); // the clock went back
+        await lookup.LookupAsync(GhOk, false);
+        Assert.Equal(2, http.Requests.Count);
+    }
+
+    [Fact]
     public async Task Manual_apps_are_not_looked_up()
     {
         var http = Network();
