@@ -115,6 +115,8 @@ Wintainium.exe --install-only     # install or update the per-user copy without 
 Wintainium.exe --uninstall        # remove the installed copy (asks first)
 ```
 
+`Wintainium.exe` is a window program, so PowerShell doesn't capture what `--list` prints. To save the table to a file, use `Start-Process Wintainium.exe --list -Wait -NoNewWindow -RedirectStandardOutput list.txt`.
+
 In the window: double-click a row to update it, right-click for more, F5 refreshes and Delete removes the selected app from the list (asking first).
 
 ## Your app list
