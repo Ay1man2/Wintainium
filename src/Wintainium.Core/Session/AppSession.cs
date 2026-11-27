@@ -2,6 +2,7 @@ using Wintainium.Core.Data;
 using Wintainium.Core.Install;
 using Wintainium.Core.Logging;
 using Wintainium.Core.Releases;
+using Wintainium.Core.Scan;
 using Wintainium.Core.Status;
 using Wintainium.Core.Token;
 
@@ -142,6 +143,28 @@ public sealed class AppSession : IDisposable
 
     public Updater Updater(IUserPrompts prompts, IShell shell, IThreatInfo? threats = null) =>
         new(InstallContext(prompts, shell, threats), List);
+
+    /// <summary>Add app with this session's folders, looking releases up with the saved token.</summary>
+    public AddApp AddApp(IUserPrompts prompts, IShell shell, IThreatInfo? threats = null)
+    {
+        InstallContext ctx = InstallContext(prompts, shell, threats);
+        return new AddApp(ctx, new Updater(ctx, List), List, InstallRoot, async (entry, cancel) =>
+        {
+            string? token = await Token.GetLookupTokenAsync(Http, Log, cancel).ConfigureAwait(false);
+            return await new ReleaseSources(Http, token).GetLatestAsync(entry, cancel).ConfigureAwait(false);
+        });
+    }
+
+    /// <summary>
+    /// The PC scan (Find-Sources -PassThru -SkipRepos), run off the calling thread. Extra folders
+    /// are searched too; <paramref name="selfFolder"/> is where this Wintainium runs from.
+    /// </summary>
+    public async Task<ScanResult> ScanAsync(IEnumerable<string> extraRoots, string selfFolder, CancellationToken cancel = default)
+    {
+        string? token = await Token.GetLookupTokenAsync(Http, Log, cancel).ConfigureAwait(false);
+        ScanOptions options = ScanOptions.ForThisPc(Settings, [.. List.Entries], selfFolder, [.. extraRoots], new GitHubRepoIds(Http, token));
+        return await Task.Run(() => new PcScanner(options).Run(cancel), cancel).ConfigureAwait(false);
+    }
 
     public void Dispose()
     {

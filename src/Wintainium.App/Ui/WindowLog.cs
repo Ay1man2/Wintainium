@@ -82,6 +82,8 @@ public static class Palette
     public static readonly Brush Green = Make("#A6E3A1");
     public static readonly Brush Amber = Make("#F9E2AF");
     public static readonly Brush Red = Make("#F38BA8");
+    public static readonly Brush Muted = Make("#A6ADC8");
+    public static readonly Brush Dim = Make("#6C7086");
 
     private static readonly Dictionary<LogColor, Brush> Map = new()
     {

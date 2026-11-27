@@ -22,6 +22,8 @@ public sealed class WindowPrompts : IUserPrompts
 
     public YesNoStop AskYesNoStop(string question) => OnUi(() => PromptDialog.Ask(owner, log.TakePromptContext(), question, offerStop: true));
 
+    public string Ask(string question) => OnUi(() => PromptDialog.AskText(owner, log.TakePromptContext(), question)) ?? "";
+
     /// <summary>The title and numbered items go to the log (and so into the dialog's context), then the number is asked.</summary>
     public int? Choose(string title, IReadOnlyList<string> items, string prompt)
     {

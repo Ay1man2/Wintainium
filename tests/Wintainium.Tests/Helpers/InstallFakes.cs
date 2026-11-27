@@ -31,6 +31,14 @@ public sealed class FakePrompts : IUserPrompts
         Asked.Add(question);
         return YesNoStops.Count > 0 ? YesNoStops.Dequeue() : YesNoStop.No;
     }
+
+    public Queue<string> Answers { get; } = new();
+
+    public string Ask(string question)
+    {
+        Asked.Add(question);
+        return Answers.Count > 0 ? Answers.Dequeue() : "";
+    }
 }
 
 /// <summary>Records what would have been handed to Windows.</summary>

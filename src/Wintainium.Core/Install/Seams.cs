@@ -14,6 +14,9 @@ public interface IUserPrompts
 
     /// <summary>Yes / No / Stop, for Update all. Closing the dialog means No.</summary>
     YesNoStop AskYesNoStop(string question);
+
+    /// <summary>A typed answer. Cancel or closing the dialog gives "", as Read-Host did in v0.3.0's window.</summary>
+    string Ask(string question);
 }
 
 public enum YesNoStop
