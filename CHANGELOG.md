@@ -1,9 +1,38 @@
 # Changelog
 
-## Unreleased
+## v0.4.0
+
+Wintainium is now a C# program on .NET 10 instead of PowerShell scripts. It looks and works the same: the same window, wizard, scan, update methods and data files. The changes below are the only intended differences.
 
 ### Changed
-- README brought up to date with v0.3.0: the four release files and how to check a download's SHA-256, a separate Updating and uninstalling section (including portable folders and git clones), safe download names and https-only links in Features, and a Security section pointing to private vulnerability reporting. The "How it was built" section was removed.
+- `Wintainium.exe` is the whole app: one self-contained file that carries the .NET runtime, so nothing needs to be installed. It installs, updates and uninstalls itself as before (`%LOCALAPPDATA%\Programs\Wintainium`, Settings > Apps entry, never a downgrade). Running it over a v0.3.0 install upgrades it in place: the old script files are removed and your app list, settings and token are kept. Updating Wintainium from its own row works across the change.
+- The portable zip is now `Wintainium.exe` with a `portable.txt` beside it, which tells it to run from that folder and install nothing.
+- Options instead of script commands: `--list`, `--setup`, `--data <folder>` (in place of `-Config`), `--install-only` and `--uninstall`. Grace days and cache minutes are `graceDays` and `cacheMinutes` in `wintainium-settings.json`; the EmuDeck location is `emuDeckExe` there.
+- Release files are built by GitHub Actions from the tagged commit, with build attestations (`gh attestation verify Wintainium.exe --repo Ay1man2/Wintainium`).
+- Version numbers decide more often: an installed 2.x against a released 3.x counts as an update even when the release date is close. Exact version matches only: 12.1.0 no longer "contains" 2.1.
+- A checksum file that is there but can't be used now stops the download instead of saying "not verified".
+- After a zip update, files the new release no longer has are listed with their folder (with an offer to open it) instead of being left without a word. They are never deleted, since they can be saves or settings. Old update backups are pruned, keeping the last two.
+- Typed (Y/n) questions in Add app answer Yes on Enter, as their text says.
+- The setup wizard describes Wintainium as an unsigned program instead of a PowerShell script.
+- The README describes the exe: the release files and how to check them, portable use, running from source and the options.
+
+### Removed
+- The PowerShell scripts (`Wintainium.ps1`, `Find-Sources.ps1`), the launcher and the PowerShell test suites. The v0.3.0 tag keeps them.
+- The console menu, the `token` and `shortcut` commands, the standalone `Find-Sources.ps1` report (`sources-inventory.csv`) and its git-clone search. The window, the setup wizard and the Scan window do all of this.
+
+### Fixed
+- A zip update of an app whose program sits in a subfolder of the zip now unpacks into the right folder.
+- A broken `wintainium-apps.json` is restored from its `.bak` with a message instead of stopping Wintainium, and every data file is written safely (a crash mid-write can't leave half a file).
+- Every web request has a time limit, lookups run several at a time, and the window stays responsive while they run.
+- Closing any yes/no question with X or Alt+F4 means No everywhere.
+
+### Security
+- Archive entries that would land outside the app folder are refused.
+- Programs and scripts unpacked from a zip keep Windows' "downloaded from the internet" mark, so SmartScreen checks them.
+- A `GITHUB_TOKEN` environment variable is only used when GitHub confirms it has no permissions.
+- User names and passwords in a link are removed before it is shown or saved.
+- `emudeckFn` values must look like `Name_install` before EmuDeck's scripts are run.
+- Arguments passed to other programs use Windows' standard quoting.
 
 ## v0.3.0 - 2026-11-27
 

@@ -16,8 +16,8 @@ This is a personal project shared as-is, so there's no promised response time an
 
 ## In scope
 
-- `Wintainium.ps1`, `Find-Sources.ps1` and `known-apps.json`
-- `Wintainium.exe` (source in `launcher/`) and how it installs, updates and uninstalls itself
+- The Wintainium source in `src/` and `known-apps.json`
+- `Wintainium.exe` and how it installs, updates and uninstalls itself
 - The release files: `Wintainium.exe`, the portable zip and their `.sha256` files
 
 Some examples: anything that lets a release server, a downloaded file or a file placed next to Wintainium run code, write outside the folders it should, or reach your GitHub token.

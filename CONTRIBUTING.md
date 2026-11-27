@@ -12,6 +12,6 @@ This is a personal project that I'm sharing as-is, for people to clone, fork and
 
 ## If you fork it
 
-- Run `.\tests\Run-Tests.ps1` after changes. The suites cover status detection, every release source, downloads, checksums and add-app, and run on Windows PowerShell 5.1 and PowerShell 7.
+- Run `dotnet test Wintainium.sln` after changes. The tests cover status detection, every release source, downloads, checksums, Add app and the self-install, and run on Windows, Linux and macOS (a few only on Windows). The project builds with warnings as errors.
 - Wintainium is GPL-3.0. If you share a modified version, keep it under the GPL-3.0 and keep the license and copyright notices.
 - Please give your fork its own name or make clear it's a fork, so people know which version they're running.

@@ -46,7 +46,7 @@ body:
         - Window (GUI)
         - Setup wizard
         - Scan / Locate .exe
-        - Console menu or `list`
+        - `--list` and other options
         - Release lookup / status / cache
         - New release source
         - Update method (existing or new)
@@ -56,8 +56,7 @@ body:
         - GitHub token
         - known-apps.json (recognized apps)
         - App list schema (new / changed fields)
-        - Find-Sources.ps1
-        - Wintainium.exe launcher / shortcuts / taskbar
+        - Install / update / uninstall of Wintainium itself, shortcuts, taskbar
         - Build / release zip
         - Tests
         - Docs only
@@ -83,7 +82,7 @@ body:
       description: What not to do or touch in this issue. Leave a later idea here so it doesn't creep in.
       placeholder: |
         - No changes to the WPF layout
-        - Don't touch Find-Sources.ps1
+        - Don't touch the scan
 
   - type: textarea
     id: examples
@@ -116,7 +115,7 @@ body:
       label: Wintainium's standing rules
       description: Keep these unless this issue explicitly changes one. Untick a box only if you mean to.
       options:
-        - label: Runs on Windows PowerShell 5.1 and PowerShell 7, with no modules or installs beyond what Windows ships
+        - label: One self-contained Wintainium.exe; no NuGet packages beyond the ones already used without asking first
         - label: Asks before installing, unpacking or running anything; zip updates back up first
         - label: Never restores quarantined files, allows threats or adds Defender exclusions; keeps the downloaded-from-internet mark
         - label: Only talks to the user's release sources and GitHub's API; no telemetry
@@ -127,7 +126,7 @@ body:
     attributes:
       label: Definition of done
       options:
-        - label: Tests added or updated (with mocked release servers), and `.\tests\Run-Tests.ps1` passes on 5.1 and 7
-        - label: README updated (features, field table, console commands, as relevant)
+        - label: Tests added or updated (with mocked release servers), and `dotnet test Wintainium.sln` passes
+        - label: README updated (features, field table, options, as relevant)
         - label: wintainium-apps.example.json updated if the schema changed
         - label: CHANGELOG.md entry under the next version's "Added" or "Changed"

@@ -33,13 +33,13 @@ How to use it:
 ## 2. GitHub token
 
 - [x] **T-01** Token stored in `wintainium-token.xml` (DPAPI, current user) with its expiry date; existing v0.3.0 files are read. Source: `Get-StoredToken`, `Save-GitHubToken`. Proof: `TokenTests.Token_file_round_trips_in_the_Clixml_format`, `Reads_a_file_written_by_Export_Clixml`, `Real_DPAPI_round_trip` and `Reads_a_token_saved_by_Windows_PowerShell` (Windows CI)
-- [ ] **T-02** `GITHUB_TOKEN` environment variable used when set (see I-06 for the added check). Source: `Get-StoredToken`. Proof:
+- [x] **T-02** `GITHUB_TOKEN` environment variable used when set (see I-06 for the added check). Source: `Get-StoredToken`. Proof: `TokenTests.GITHUB_TOKEN_is_used_only_when_it_has_no_scopes` (with the X-04 check)
 - [x] **T-03** Unreadable token file: warning that says how to save it again; app continues without a token. Source: `Get-StoredToken`. Proof: `TokenTests.Unreadable_token_warns_and_continues_without_one` (message now points to Setup, since the `token` command is dropped)
 - [x] **T-04** Token check against `https://api.github.com/rate_limit`: accepted / rejected, limit, scopes from `X-OAuth-Scopes`, expiry from `github-authentication-token-expiration` (both formats: offset and UTC). Source: `Test-GitHubToken`, `ConvertFrom-GitHubExpiry`. Proof: `TokenTests` expiry and check tests
 - [x] **T-05** Safe only when classic with no scopes; fine-grained (`github_pat_`) and scoped tokens get their own messages. Source: `Test-GitHubToken`. Proof: `TokenTests.Scoped_token_flagged`, `Fine_grained_not_safe`
 - [x] **T-06** Token sent only to api.github.com (never to itch.io, GitLab, Gitea, Dolphin or download hosts). Source: `$ghHeaders` use. Proof: `ReleaseSourcesTests.GitHub_token_goes_only_to_api_github_com`, `Itch_request_never_carries_the_token`, `Gitea_Forgejo_source_resolves`, `TokenTests.Token_is_only_sent_to_the_GitHub_API`
-- [ ] **T-07** Expiry warning when 7 days or fewer are left. Source: `Show-LookupNotes`. Proof:
-- [ ] **T-08** Token page link opens GitHub's new-token page with the description filled and no scopes. Source: `$script:TokenPageUrl`. Proof:
+- [x] **T-07** Expiry warning when 7 days or fewer are left. Source: `Show-LookupNotes`. Proof: `LookupNotesTests.Expiring_token_warned_within_a_week`, `Expired_token_says_it_has_expired`
+- [ ] **T-08** Token page link opens GitHub's new-token page with the description filled and no scopes. Source: `$script:TokenPageUrl`. Proof: `GitHubTokenCheck.TokenPageUrl` opened by the wizard through `WebPage`; PC check pending
 
 ## 3. Release sources and cache
 
@@ -50,7 +50,7 @@ How to use it:
 - [x] **S-05** GitLab via `api`: tag, released date, page, asset links, description. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.GitLab_source_resolves`
 - [x] **S-06** itch.io: game page read with browser-like headers (identifies Wintainium), 20 s timeout; picks the upload matching `asset`, else the Windows one, else the first; version or file name as tag; UTC date; error when no downloads listed. Source: `Read-ItchPage`, `$itchHeaders`. Proof: `ItchPageTests` (all), `ReleaseSourcesTests.Itch_request_*`
 - [x] **S-07** Dolphin feed: `shortrev` tag, Windows x64 artifacts, changelog HTML turned into text, fixed download page. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.Dolphin_feed_resolves`
-- [ ] **S-08** `manual` source: no lookup, status "check manually". Source: `Get-AppRows`. Proof:
+- [x] **S-08** `manual` source: no lookup, status "check manually". Source: `Get-AppRows`. Proof: `StatusTests.Manual_check_manually`, `ReleaseSourcesTests.Manual_source_is_not_looked_up`, `ReleaseLookupTests.Manual_apps_are_not_looked_up`
 - [x] **S-09** Lookup address must be https, else the lookup fails without a request. Source: `Get-LatestRelease`, `Test-HttpsUrl`. Proof: `ReleaseSourcesTests.Http_address_is_not_requested`, `ReleaseLookupTests.Http_address_is_lookup_failed`
 - [x] **S-10** Cache answers reused for 60 minutes; Re-check all ignores the cache. Source: `Get-LatestCached`. Proof: `ReleaseLookupTests.Cache_is_reused_only_inside_the_window`, `Second_run_served_from_cache`
 - [x] **S-11** A failed lookup with a cached answer falls back to it, marks Latest "(cached)" and records why and when. Source: `Get-LatestCached`. Proof: `ReleaseLookupTests.Itch_403_falls_back_to_the_saved_answer`
@@ -74,7 +74,7 @@ How to use it:
 - [x] **U-01** Several methods: choose which (Enter = first, x = cancel). Source: `Update-App`. Proof: `InstallTests.Update_app_asks_which_method_when_there_are_several`
 - [x] **U-02** Update all: each outdated app asks Yes / No / Stop, uses its first method, skips the confirmations inside. Source: `Update-All`. Proof: `InstallTests.Update_all_asks_each_outdated_app_and_stops_when_asked`
 - [x] **U-03** "Nothing to update." when no app is outdated. Source: `Update-All`. Proof: `InstallTests.Update_all_asks_each_outdated_app_and_stops_when_asked`
-- [ ] **U-04** Updating an app that isn't UPDATE asks "Run its update anyway?". Source: `Start-SelectedUpdate`. Proof:
+- [x] **U-04** Updating an app that isn't UPDATE asks "Run its update anyway?". Source: `Start-SelectedUpdate`. Proof: `SessionTests.Update_of_a_row_without_update_asks_first`
 - [x] **U-05** `emudeck`: refuses while the app runs; explains and asks; runs EmuDeck's install function; shows seconds and MB in EmuDeck's temp folder; reports EmuDeck errors; says whether the exe changed (with the log folder if not). Source: `Invoke-EmuDeckInstall`. Proof: `InstallTests.EmuDeck_install_runs_its_function_and_reports_the_new_exe`, `EmuDeck_errors_and_an_unchanged_exe_are_reported`, `EmuDeck_refused_while_the_emulator_runs` (real EmuDeck run: PR 8 side-by-side)
 - [x] **U-06** `emudeck` without `emudeckFn` or without EmuDeck's backend: opens EmuDeck with instructions, or says where it wasn't found. Source: `Open-EmuDeck`. Proof: `InstallTests.EmuDeck_without_its_backend_opens_EmuDeck_with_instructions`
 - [x] **U-07** `inapp`: starts the program (or `launch`) in its own folder, shows `hint`; "Not found" when missing. Source: `Invoke-Method`. Proof: `InstallTests.Inapp_starts_the_program_or_its_launcher_and_shows_the_hint`
@@ -242,19 +242,19 @@ Questions asked today (all become dialogs):
 Decided for v0.4.0 (see port plan): keep the window as the main way in, and a few flags for people
 who know what they're doing.
 
-- [ ] **L-01** `Wintainium.exe` with no arguments opens the window. Source: L, `gui`. Proof:
+- [ ] **L-01** `Wintainium.exe` with no arguments opens the window. Source: L, `gui`. Proof: `App.OnStartup`; PC check pending
 - [ ] **L-02** `--list` prints the table (App, Status, Installed, Latest, Released, Update via, number of updates, lookup notes) to the console it was started from. Source: `list`, `Show-Table`. Proof: table: `SessionTests.Table_matches_the_v030_layout`; console output: PC check pending
-- [ ] **L-03** `--setup` opens the window with the setup wizard first. Source: `setup`. Proof:
-- [ ] **L-04** `--uninstall` and `--install-only` (I-06, I-07). Source: L. Proof:
+- [ ] **L-03** `--setup` opens the window with the setup wizard first. Source: `setup`. Proof: `MainWindow` opens the wizard first with `--setup`; PC check pending
+- [ ] **L-04** `--uninstall` and `--install-only` (I-06, I-07). Source: L. Proof: `SelfStart.Run` / `SelfStart.Uninstall` (I-06, I-07); PC check pending
 - [x] **L-05** `--data <folder>` uses the data files in that folder (replaces `-Config`). Source: `-Config`. Proof: `SessionTests.Options_are_read`, `Bad_options_are_explained`
-- [ ] **L-06** Grace days and cache minutes kept as optional settings keys (defaults 3 and 60), replacing `-GraceDays` and `-CacheMinutes`. Source: `param`. Proof:
-- [ ] **L-07** EmuDeck location: default `%LOCALAPPDATA%\Programs\EmuDeck\EmuDeck.exe` (replaces `-EmuDeckExe`). Source: `param`. Proof:
+- [x] **L-06** Grace days and cache minutes kept as optional settings keys (defaults 3 and 60), replacing `-GraceDays` and `-CacheMinutes`. Source: `param`. Proof: `SettingsTests.Grace_days_and_cache_minutes_can_be_set`, `Grace_and_cache_minutes_below_one_or_too_big_use_the_default`
+- [x] **L-07** EmuDeck location: default `%LOCALAPPDATA%\Programs\EmuDeck\EmuDeck.exe` (replaces `-EmuDeckExe`). Source: `param`. Proof: `SessionTests.Folders_default_and_follow_settings`
 
 ## 19. Release build
 
-- [ ] **B-01** Four assets: `Wintainium.exe`, `Wintainium.exe.sha256`, `Wintainium-<ver>-portable.zip`, `Wintainium-<ver>-portable.zip.sha256` (`<hash>  <name>` format). Source: `build/Build-Release.ps1`. Proof:
-- [ ] **B-02** Exe version info (product, description, company, copyright GPL-3.0 link, version) and icon. Source: L assembly attributes. Proof:
-- [ ] **B-03** Built by CI from a tag into a draft release with build attestations; the maintainer tests that exe before publishing. Source: new (port plan). Proof:
+- [ ] **B-01** Four assets: `Wintainium.exe`, `Wintainium.exe.sha256`, `Wintainium-<ver>-portable.zip`, `Wintainium-<ver>-portable.zip.sha256` (`<hash>  <name>` format). Source: `build/Build-Release.ps1`. Proof: `build/Build-Release.ps1` and the release job in `.github/workflows/build.yml`; checked on the first tag
+- [ ] **B-02** Exe version info (product, description, company, copyright GPL-3.0 link, version) and icon. Source: L assembly attributes. Proof: `Directory.Build.props` (product, company, copyright, version) and `ApplicationIcon`; PC check pending
+- [ ] **B-03** Built by CI from a tag into a draft release with build attestations; the maintainer tests that exe before publishing. Source: new (port plan). Proof: release job in `.github/workflows/build.yml` (tag must match `<Version>`, attest-build-provenance, `gh release create --draft`); checked on the first tag
 
 ---
 
@@ -267,7 +267,7 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [x] **X-02** Unpacked programs and scripts keep the download mark. (#2) Proof: `InstallTests.Unpacked_programs_keep_the_mark`
 - [x] **X-03** Checksum file present but unusable = download refused, not "not verified". Wording "integrity check". (#4) Proof: `DownloadTests.Unusable_checksum_refuses`
 - [x] **X-04** `GITHUB_TOKEN` used only if it passes the no-scope check. (#6) Proof: `TokenTests.GITHUB_TOKEN_is_used_only_when_it_has_no_scopes`
-- [ ] **X-05** Usernames/passwords removed from any URL shown or saved. (#7) Proof:
+- [x] **X-05** Usernames/passwords removed from any URL shown or saved. (#7) Proof: `LinksTests` (StripUserInfo), `AddAppTests.Passwords_in_a_link_are_dropped`; downloads and WebPage show the stripped link
 - [x] **X-06** `emudeckFn` must match `^[A-Za-z0-9]+_install$`. (#8) Proof: `InstallTests.EmuDeck_function_names_are_checked`, `Bad_EmuDeck_function_not_run`
 - [x] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof: `SelfInstallerTests.Arguments_are_quoted_the_windows_way`
 - [x] **X-08** Zip updates unpack into the right folder when the exe sits in a subfolder. (correctness 1) Proof: `InstallTests.Exe_in_subfolder_updates_the_right_folder`
@@ -275,8 +275,8 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [x] **X-10** Exact version match instead of substring (12.1.0 no longer "contains" 2.1). (correctness 3) Proof: `VersionCompareTests.Same_release_needs_the_whole_number`, listed in `StatusGoldenTests.Deviations`
 - [x] **X-11** Atomic writes for every data file; a broken app list is restored from `.bak` with a clear message instead of stopping startup. (correctness 4) Proof: `AppListTests.Saves_utf8_without_bom_and_keeps_a_backup`, `Broken_list_is_restored_from_the_backup`, `Broken_list_without_backup_is_reported_and_left_alone`
 - [x] **X-12** Old backups pruned; files a new zip release no longer has are reported, not deleted. (correctness 5) Proof: `InstallTests.Old_backups_pruned`, `InstallTests.Leftover_files_are_kept_and_reported` (PR 6). Intentional change (decided by the owner): leftover files are never deleted, because they can be saves or settings; after an update the app lists them with their folder and offers to open it.
-- [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof:
-- [ ] **X-14** Closing any yes/no dialog with X or Alt+F4 = No (already true in v0.3.0's window; now true everywhere). (correctness 7) Proof:
+- [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof: per-request timeouts in `ReleaseSources`, `GitHubTokenCheck`, `Downloader`; lookups 6 at a time (`ReleaseLookup.MaxParallel`) on a worker thread (`MainWindow.RefreshGridAsync`); PC check pending
+- [ ] **X-14** Closing any yes/no dialog with X or Alt+F4 = No (already true in v0.3.0's window; now true everywhere). (correctness 7) Proof: `PromptDialog` starts at No and only Yes sets Yes; uninstall boxes treat close as Cancel/No; PC check pending
 - [ ] **X-15** Wizard welcome text describes the exe instead of "an unsigned PowerShell script ... Wintainium.ps1". Proof: `src/Wintainium.App/Ui/SetupWizard.xaml` (step 1); PC check pending
 
 ## Dropped on purpose

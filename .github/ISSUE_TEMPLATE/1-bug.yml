@@ -31,7 +31,7 @@ body:
       label: Steps to reproduce
       description: Exact clicks or commands, in order. Say if it happens every time or only sometimes.
       placeholder: |
-        1. .\Wintainium.ps1 gui
+        1. Open Wintainium
         2. Select PCSX2, click Update
         3. Press F5
       render: text
@@ -48,7 +48,7 @@ body:
         - Window (GUI)
         - Setup wizard
         - Scan / Locate .exe
-        - Console menu or `list`
+        - `--list` output
         - Release lookup / status / cache
         - Update method (emudeck, inapp, installer, zip, download, page)
         - Downloads / checksums / antivirus handling
@@ -56,8 +56,7 @@ body:
         - Mods / data packs (installedTag, installDir)
         - GitHub token
         - known-apps.json (recognized apps)
-        - Find-Sources.ps1
-        - Wintainium.exe launcher / shortcuts / taskbar
+        - Install / update / uninstall of Wintainium itself, shortcuts, taskbar
         - Build / release zip
         - Tests
     validations:
@@ -88,7 +87,7 @@ body:
     id: output
     attributes:
       label: Console output / error
-      description: Full output, not a summary. For the window, run `.\Wintainium.ps1 list` or the console menu to get text output if you can. For EmuDeck updates, include anything from `%APPDATA%\EmuDeck\logs`.
+      description: Full output, not a summary. Copy the lines from the log pane at the bottom of the window, or run `Wintainium.exe --list` for text output. For EmuDeck updates, include anything from `%APPDATA%\EmuDeck\logs`.
       render: text
 
   - type: textarea
@@ -109,18 +108,6 @@ body:
     validations:
       required: true
 
-  - type: dropdown
-    id: powershell
-    attributes:
-      label: PowerShell
-      multiple: true
-      options:
-        - Windows PowerShell 5.1 (Wintainium.exe uses this)
-        - PowerShell 7
-        - Not sure
-    validations:
-      required: true
-
   - type: input
     id: windows
     attributes:
@@ -131,7 +118,7 @@ body:
     id: tests
     attributes:
       label: Do the tests pass?
-      description: Result of `.\tests\Run-Tests.ps1` on your PC.
+      description: Result of `dotnet test Wintainium.sln` on your PC.
       options:
         - Didn't run them
         - All pass
@@ -141,7 +128,7 @@ body:
     id: hunch
     attributes:
       label: Hunch (optional)
-      description: Function, suite or recent change you suspect, e.g. `Test-OlderVersion`, `Get-LatestCached`, "started after the itch.io headers change".
+      description: Class, test or recent change you suspect, e.g. `VersionCompare.IsOlder`, `ReleaseLookup`, "started after the itch.io headers change".
 
   - type: checkboxes
     id: done
@@ -149,7 +136,7 @@ body:
       label: Definition of done
       description: What the fix must include. Untick anything that doesn't apply.
       options:
-        - label: Regression test added to the matching `tests/Test-*.ps1` suite, failing before the fix
-        - label: "`.\\tests\\Run-Tests.ps1` passes on Windows PowerShell 5.1 and PowerShell 7"
+        - label: Regression test added under `tests/Wintainium.Tests`, failing before the fix
+        - label: "`dotnet test Wintainium.sln` passes"
         - label: CHANGELOG.md entry under the next version's "Fixed"
         - label: README updated if behaviour or a message changed
