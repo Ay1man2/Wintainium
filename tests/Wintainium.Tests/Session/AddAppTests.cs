@@ -375,6 +375,8 @@ public sealed class AddAppTests : IDisposable
                 Threats = ctx.Threats,
                 Processes = ctx.Processes,
                 DownloadDir = ctx.DownloadDir,
+                EmuDeckExe = ctx.EmuDeckExe,
+                EmuDeckData = ctx.EmuDeckData, // never the real EmuDeck folder (its 7-Zip would take over the unpack)
                 TempDir = ctx.TempDir,
                 Delay = (_, _) =>
                 {
