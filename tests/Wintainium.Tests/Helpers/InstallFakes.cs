@@ -40,9 +40,10 @@ public sealed class FakePrompts : IUserPrompts
         return YesNoStops.Count > 0 ? YesNoStops.Dequeue() : YesNoStop.No;
     }
 
-    public Queue<string> Answers { get; } = new();
+    /// <summary>Typed answers; null is Cancel.</summary>
+    public Queue<string?> Answers { get; } = new();
 
-    public string Ask(string question)
+    public string? Ask(string question)
     {
         Asked.Add(question);
         return Answers.Count > 0 ? Answers.Dequeue() : "";

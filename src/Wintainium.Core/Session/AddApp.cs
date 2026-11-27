@@ -24,6 +24,11 @@ public sealed partial class AddApp
     private readonly string installRoot;
     private readonly Func<AppEntry, CancellationToken, Task<ReleaseInfo?>> latestRelease;
 
+    /// <summary>What "install it now" put on disk, so a cancelled or failed add can take it away again.</summary>
+    private Installed? installed;
+
+    private sealed record Installed(string Dir, bool CreatedDir, IReadOnlyList<string> Files, string Download);
+
     public AddApp(InstallContext ctx, Updater updater, AppList list, string installRoot, Func<AppEntry, CancellationToken, Task<ReleaseInfo?>> latestRelease)
     {
         this.ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
@@ -91,7 +96,13 @@ public sealed partial class AddApp
         ILog log = ctx.Log;
         IUserPrompts ask = ctx.Prompts;
         log.Write("");
-        AddSource? src = ParseSource(ask.Ask("  " + UrlQuestion));
+        string? url = ask.Ask("  " + UrlQuestion);
+        if (url is null)
+        {
+            return Cancelled();
+        }
+
+        AddSource? src = ParseSource(url);
         if (src is null)
         {
             log.Write("  Cancelled: that does not look like a repo or release URL.", LogColor.Yellow);
@@ -115,7 +126,13 @@ public sealed partial class AddApp
             def.Api = src.Api;
         }
 
-        string name = ask.Ask($"  App name (Enter = {src.ShortName})").Trim();
+        string? typedName = ask.Ask($"  App name (Enter = {src.ShortName})");
+        if (typedName is null)
+        {
+            return Cancelled();
+        }
+
+        string name = typedName.Trim();
         if (name.Length == 0)
         {
             name = src.ShortName;
@@ -130,7 +147,13 @@ public sealed partial class AddApp
         if (src.Source == "itch")
         {
             log.Write("  itch.io downloads go through its website, so this tracks a copy you already installed.");
-            string itchExe = Unquote(ask.Ask("  Path to its .exe"));
+            string? typedExe = ask.Ask("  Path to its .exe");
+            if (typedExe is null)
+            {
+                return Cancelled();
+            }
+
+            string itchExe = Unquote(typedExe);
             if (itchExe.Length == 0)
             {
                 log.Write("  Cancelled: an itch.io app needs the path to its .exe.", LogColor.Yellow);
@@ -144,7 +167,13 @@ public sealed partial class AddApp
             return def;
         }
 
-        string exe = Unquote(ask.Ask("  Path to its .exe (or a mod's folder) if it is already installed (Enter = install it now)"));
+        string? typed = ask.Ask("  Path to its .exe (or a mod's folder) if it is already installed (Enter = install it now)");
+        if (typed is null)
+        {
+            return Cancelled();
+        }
+
+        string exe = Unquote(typed);
         if (exe.Length > 0 && Directory.Exists(exe))
         {
             if (!await TrackFolderAsync(def, exe, cancel).ConfigureAwait(false))
@@ -157,12 +186,37 @@ public sealed partial class AddApp
             def.Exe = exe;
             def.Update = ["download", "page"];
         }
-        else if (!await InstallNowAsync(def, cancel).ConfigureAwait(false))
+        else
         {
-            return null;
+            bool ok;
+            try
+            {
+                ok = await InstallNowAsync(def, cancel).ConfigureAwait(false);
+            }
+            catch
+            {
+                RemoveInstalled();
+                throw;
+            }
+
+            if (!ok)
+            {
+                RemoveInstalled();
+                return null;
+            }
         }
 
-        Save(def);
+        try
+        {
+            Save(def);
+        }
+        catch
+        {
+            RemoveInstalled();
+            throw;
+        }
+
+        installed = null;
         log.Write($"  Added {name}. Edit wintainium-apps.json to change how it updates.", LogColor.Green);
         return def;
     }
@@ -204,7 +258,14 @@ public sealed partial class AddApp
 
         log.Write($"  Latest release: {latest.Tag}", LogColor.Cyan);
         string fallback = Path.Combine(installRoot, def.Name);
-        string dir = Unquote(ask.Ask($"  Install folder (Enter = {fallback})"));
+        string? typedDir = ask.Ask($"  Install folder (Enter = {fallback})");
+        if (typedDir is null)
+        {
+            log.Write("  Cancelled.");
+            return false;
+        }
+
+        string dir = Unquote(typedDir);
         if (dir.Length == 0)
         {
             dir = fallback;
@@ -243,18 +304,28 @@ public sealed partial class AddApp
             return false;
         }
 
+        // only files this add creates are taken away again; files already in the folder stay
+        bool createdDir = !Directory.Exists(dir);
+        var before = new HashSet<string>(createdDir ? [] : Directory.GetFiles(dir, "*", SearchOption.AllDirectories), StringComparer.OrdinalIgnoreCase);
+        installed = new Installed(dir, createdDir, [], file);
         string method;
+        IReadOnlyList<string> written;
         if (Archives.CanUnpack(file, ctx.SevenZip))
         {
-            await Archives.ExpandToFolderAsync(file, dir, ctx, cancel: cancel).ConfigureAwait(false);
+            UnpackResult? r = await Archives.ExpandAsync(file, dir, ctx, cancel: cancel).ConfigureAwait(false);
+            written = r?.Files ?? [];
             method = "zip";
         }
         else
         {
             Directory.CreateDirectory(dir);
-            File.Copy(file, Path.Combine(dir, Path.GetFileName(file)), overwrite: true);
+            string copy = Path.Combine(dir, Path.GetFileName(file));
+            File.Copy(file, copy, overwrite: true);
+            written = [copy];
             method = "download";
         }
+
+        installed = installed with { Files = [.. written.Where(f => !before.Contains(f))] };
 
         log.Write($"  Installed into {dir}", LogColor.Green);
 
@@ -292,7 +363,13 @@ public sealed partial class AddApp
         if (cands.Count > 1)
         {
             int? n = ask.Choose("Which file is the main program?", [.. cands.Select(c => Path.GetRelativePath(dir, c))], "number (Enter = 1)");
-            main = cands[n ?? 0];
+            if (n is null)
+            {
+                log.Write("  Cancelled.");
+                return false;
+            }
+
+            main = cands[n.Value];
         }
 
         def.Exe = main;
@@ -351,6 +428,70 @@ public sealed partial class AddApp
         {
             list.RemoveEntry(def);
             throw;
+        }
+    }
+
+    private AppEntry? Cancelled()
+    {
+        ctx.Log.Write("  Cancelled.");
+        return null;
+    }
+
+    /// <summary>
+    /// A cancelled or failed add takes away what it installed: the files it unpacked or copied (never
+    /// files that were already there), folders left empty by that, and the download.
+    /// </summary>
+    private void RemoveInstalled()
+    {
+        if (installed is not { } done)
+        {
+            return;
+        }
+
+        installed = null;
+        int removed = 0;
+        foreach (string f in done.Files.Append(done.Download))
+        {
+            try
+            {
+                if (File.Exists(f))
+                {
+                    File.Delete(f);
+                    removed += f == done.Download ? 0 : 1;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ctx.Log.Write($"  Could not remove {f}: {ex.Message}", LogColor.Yellow);
+            }
+        }
+
+        try
+        {
+            if (Directory.Exists(done.Dir))
+            {
+                foreach (string sub in Directory.GetDirectories(done.Dir, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
+                {
+                    if (!Directory.EnumerateFileSystemEntries(sub).Any())
+                    {
+                        Directory.Delete(sub);
+                    }
+                }
+
+                if (done.CreatedDir && !Directory.EnumerateFileSystemEntries(done.Dir).Any())
+                {
+                    Directory.Delete(done.Dir);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ctx.Log.Write($"  Could not tidy up {done.Dir}: {ex.Message}", LogColor.Yellow);
+        }
+
+        if (removed > 0)
+        {
+            ctx.Log.Write($"  Removed the {removed} file(s) it had installed.", LogColor.DarkGray);
         }
     }
 

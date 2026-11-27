@@ -278,6 +278,7 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof: per-request timeouts in `ReleaseSources`, `GitHubTokenCheck`, `Downloader`; lookups 6 at a time (`ReleaseLookup.MaxParallel`) on a worker thread (`MainWindow.RefreshGridAsync`); PC check pending
 - [ ] **X-14** Closing any yes/no dialog with X or Alt+F4 = No (already true in v0.3.0's window; now true everywhere). (correctness 7) Proof: `PromptDialog` starts at No and only Yes sets Yes; uninstall boxes treat close as Cancel/No; PC check pending
 - [ ] **X-15** Wizard welcome text describes the exe instead of "an unsigned PowerShell script ... Wintainium.ps1". Proof: `src/Wintainium.App/Ui/SetupWizard.xaml` (step 1); PC check pending
+- [x] **X-16** Cancel on any Add app question stops Add app (v0.3.0 took it as Enter, so Cancel on "Install folder" installed into the default folder). Files it already unpacked or copied, folders left empty and the download are removed again; files that were already in the folder stay. The same clean-up runs when an install-now add fails. (user decision) Proof: `AddAppTests.Cancel_on_the_link_stops`, `Cancel_on_the_install_folder_installs_nothing`, `Cancel_after_installing_removes_what_it_installed_but_not_files_that_were_there`
 
 ## Dropped on purpose
 
