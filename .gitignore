@@ -5,7 +5,7 @@ wintainium-token.xml
 emu-apps.json
 emu-cache.json
 emu-token.xml
-# output of Find-Sources.ps1
+# report of the v0.3.0 Find-Sources.ps1
 sources-inventory.csv
 # settings chosen in the setup wizard (folders)
 wintainium-settings.json

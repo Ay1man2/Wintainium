@@ -1,0 +1,20 @@
+<Window x:Class="Wintainium.App.Ui.NotesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="What's new" Width="720" Height="560" WindowStartupLocation="CenterOwner"
+        Background="#1E1E2E" Foreground="#CDD6F4" FontFamily="Segoe UI" FontSize="13" ShowInTaskbar="False">
+  <Grid Margin="20,16,20,12">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+      <TextBlock x:Name="NTitle" FontSize="18" FontWeight="SemiBold"/>
+      <TextBlock x:Name="NSub" Foreground="#A6ADC8" Margin="0,2,0,0"/>
+    </StackPanel>
+    <TextBox x:Name="NBody" Grid.Row="1" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+             Background="#181825" Foreground="#CDD6F4" BorderThickness="0" Padding="10"
+             FontFamily="Cascadia Mono, Consolas" FontSize="12"/>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+      <Button x:Name="NOpen" Style="{StaticResource Btn}" Content="Open release page" Click="NOpen_Click"/>
+      <Button x:Name="NClose" Style="{StaticResource Primary}" Content="Close" IsCancel="True" Click="NClose_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

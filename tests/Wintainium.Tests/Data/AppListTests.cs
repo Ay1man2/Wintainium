@@ -79,6 +79,23 @@ public class AppListTests
         Assert.Single(AppList.Load(path, NullLog.Instance).Entries);
     }
 
+    [Fact(DisplayName = "non-ASCII names and paths are saved as pure ASCII (v0.3.0 reads as ANSI)")]
+    public void Non_ascii_round_trips_and_is_written_as_ascii()
+    {
+        using var dir = new TempDir();
+        const string Name = "Pok\u00e9mon Caf\u00e9 \u65e5\u672c";
+        const string Exe = "C:\\Jeux\\\u00c9mulateurs\\caf\u00e9.exe";
+        string path = dir.Write("a.json", $$"""[ { "name": "{{Name}}", "exe": "{{Exe.Replace(@"\", @"\\", StringComparison.Ordinal)}}", "source": "manual" } ]""");
+        AppList list = AppList.Load(path, NullLog.Instance);
+        list.Save();
+        byte[] bytes = File.ReadAllBytes(path);
+        Assert.All(bytes, b => Assert.True(b < 0x80));
+        Assert.Contains("\\u00e9", File.ReadAllText(path), StringComparison.Ordinal);
+        AppEntry e = Assert.Single(AppList.Load(path, NullLog.Instance).Entries);
+        Assert.Equal(Name, e.Name);
+        Assert.Equal(Exe, e.Exe);
+    }
+
     [Fact]
     public void Broken_list_is_restored_from_the_backup()
     {
@@ -164,6 +181,30 @@ public class AppListTests
         e.Name = "Y";
         Assert.Equal("Y", e.Json["Name"]!.GetValue<string>());
         Assert.False(e.Json.ContainsKey("name"));
+    }
+
+    [Fact(DisplayName = "every app field is read (D-03)")]
+    public void Every_field_is_read()
+    {
+        var e = new AppEntry(System.Text.Json.Nodes.JsonNode.Parse("""
+            { "name": "N", "exe": "e.exe", "source": "gitlab", "repo": "o/r", "tag": "t", "prerelease": true, "api": "https://api",
+              "url": "https://url", "asset": "^a$", "downloadUrl": "https://dl", "update": ["emudeck", "page"], "emudeckFn": "X_install",
+              "hint": "h", "launch": "l.exe", "graceDays": 5, "installDir": "D", "installedTag": "v1", "note": "n" }
+            """)!.AsObject());
+        Assert.Equal(
+            ("N", "e.exe", "gitlab", "o/r", "t", true, "https://api", "https://url", "^a$", "https://dl"),
+            (e.Name, e.Exe, e.Source, e.Repo, e.Tag, e.Prerelease, e.Api, e.Url, e.Asset, e.DownloadUrl));
+        Assert.Equal(["emudeck", "page"], e.Update);
+        Assert.Equal(("X_install", "h", "l.exe", 5, "D", "v1", "n"), (e.EmudeckFn, e.Hint, e.Launch, e.GraceDays, e.InstallDir, e.InstalledTag, e.Note));
+    }
+
+    [Fact(DisplayName = "environment variables in exe, launch and installDir are expanded (D-04)")]
+    public void Environment_variables_are_expanded()
+    {
+        Environment.SetEnvironmentVariable("WINTAINIUM_TEST_ROOT", "R");
+        var e = new AppEntry { Exe = "%WINTAINIUM_TEST_ROOT%/a.exe", Launch = "%WINTAINIUM_TEST_ROOT%/b.exe", InstallDir = "%WINTAINIUM_TEST_ROOT%/D" };
+        Assert.Equal(("R/a.exe", "R/b.exe", "R/D"), (e.ExpandedExe, e.ExpandedLaunch, e.ExpandedInstallDir));
+        Assert.Equal("%WINTAINIUM_TEST_ROOT%/a.exe", e.Exe); // saved as written
     }
 
     [Fact]

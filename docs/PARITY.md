@@ -21,11 +21,11 @@ How to use it:
 
 - [x] **D-01** App list `wintainium-apps.json` next to the app; created as `[]` with a notice when missing. Source: startup block. Proof: `AppListTests.Missing_list_is_created_empty_with_a_notice`
 - [x] **D-02** App list read as an array also when it holds one entry. Source: startup block. Proof: `AppListTests.One_entry_written_as_an_object_reads_as_a_list`
-- [ ] **D-03** App fields understood: `name`, `exe`, `source` (`github`, `gitlab`, `gitea`, `itch`, `dolphin`, `manual`), `repo`, `tag`, `prerelease`, `api`, `url`, `asset`, `downloadUrl`, `update`, `emudeckFn`, `hint`, `launch`, `graceDays`, `installDir`, `installedTag`, `note`. Source: whole script. Proof:
-- [ ] **D-04** Environment variables in `exe`, `launch`, `installDir` are expanded (`%APPDATA%` etc.). Source: `Get-AppRows`, `Start-App`, `Get-AppFolder`. Proof:
-- [ ] **D-05** App list written after Add app, Remove, scan add, and installedTag updates; other fields of every entry kept. Source: `Add-App`, `Remove-AppEntry`, `Add-ScanSelection`, `Save-InstalledTag`. Proof:
+- [x] **D-03** App fields understood: `name`, `exe`, `source` (`github`, `gitlab`, `gitea`, `itch`, `dolphin`, `manual`), `repo`, `tag`, `prerelease`, `api`, `url`, `asset`, `downloadUrl`, `update`, `emudeckFn`, `hint`, `launch`, `graceDays`, `installDir`, `installedTag`, `note`. Source: whole script. Proof: `AppListTests.Every_field_is_read`, `Field_names_match_case_insensitively_like_PowerShell`
+- [x] **D-04** Environment variables in `exe`, `launch`, `installDir` are expanded (`%APPDATA%` etc.). Source: `Get-AppRows`, `Start-App`, `Get-AppFolder`. Proof: `AppListTests.Environment_variables_are_expanded`
+- [x] **D-05** App list written after Add app, Remove, scan add, and installedTag updates; other fields of every entry kept. Source: `Add-App`, `Remove-AppEntry`, `Add-ScanSelection`, `Save-InstalledTag`. Proof: Add app: `AddAppTests`; scan: `SetupAndScanTests.Add_selected_adds_ticked_rows_with_a_program_and_unique_names`; remove: `SessionTests.Remove_asks_then_drops_the_entry_and_its_cache_but_not_files`; installedTag: `InstallTests.Mod_update`; other fields kept: `AppListTests.Unknown_fields_and_field_order_survive_a_save`
 - [x] **D-06** Settings `wintainium-settings.json`: `installRoot`, `downloadDir`, `setupDone`, `goldSelf`, `scanIgnore`; unreadable file treated as empty. Source: settings block, `Save-Settings`. Proof: `SettingsTests` (all)
-- [ ] **D-07** Default folders: installs `%USERPROFILE%\Wintainium\Apps`, downloads `%USERPROFILE%\Downloads\Wintainium`; settings override defaults. Source: `param`, settings block. Proof:
+- [x] **D-07** Default folders: installs `%USERPROFILE%\Wintainium\Apps`, downloads `%USERPROFILE%\Downloads\Wintainium`; settings override defaults. Source: `param`, settings block. Proof: `SessionTests.Folders_default_and_follow_settings`
 - [x] **D-08** Release cache `wintainium-cache.json`, keyed by app name: `Tag`, `Date`, `Page`, `Assets` (name + url), `Notes` (cut at 20,000 chars), `Fetched`; unreadable file treated as empty. Source: `Get-LatestCached`, `Save-Cache`. Proof: `ReleaseCacheTests` (all)
 - [x] **D-09** Legacy files `emu-apps.json`, `emu-cache.json`, `emu-token.xml` copied once to the new names when those don't exist. Source: startup block. Proof: `AppListTests.Legacy_files_are_copied_once`
 - [x] **D-10** Files written by Windows PowerShell 5.1 (UTF-8 with BOM) and 7 (without) are both read. Source: n/a (compatibility). Proof: `AppListTests.Reads_utf8_with_and_without_bom`, `ReleaseCacheTests.Reads_what_PowerShell_wrote`
@@ -33,13 +33,13 @@ How to use it:
 ## 2. GitHub token
 
 - [x] **T-01** Token stored in `wintainium-token.xml` (DPAPI, current user) with its expiry date; existing v0.3.0 files are read. Source: `Get-StoredToken`, `Save-GitHubToken`. Proof: `TokenTests.Token_file_round_trips_in_the_Clixml_format`, `Reads_a_file_written_by_Export_Clixml`, `Real_DPAPI_round_trip` and `Reads_a_token_saved_by_Windows_PowerShell` (Windows CI)
-- [ ] **T-02** `GITHUB_TOKEN` environment variable used when set (see I-06 for the added check). Source: `Get-StoredToken`. Proof:
+- [x] **T-02** `GITHUB_TOKEN` environment variable used when set (see I-06 for the added check). Source: `Get-StoredToken`. Proof: `TokenTests.GITHUB_TOKEN_is_used_only_when_it_has_no_scopes` (with the X-04 check)
 - [x] **T-03** Unreadable token file: warning that says how to save it again; app continues without a token. Source: `Get-StoredToken`. Proof: `TokenTests.Unreadable_token_warns_and_continues_without_one` (message now points to Setup, since the `token` command is dropped)
 - [x] **T-04** Token check against `https://api.github.com/rate_limit`: accepted / rejected, limit, scopes from `X-OAuth-Scopes`, expiry from `github-authentication-token-expiration` (both formats: offset and UTC). Source: `Test-GitHubToken`, `ConvertFrom-GitHubExpiry`. Proof: `TokenTests` expiry and check tests
 - [x] **T-05** Safe only when classic with no scopes; fine-grained (`github_pat_`) and scoped tokens get their own messages. Source: `Test-GitHubToken`. Proof: `TokenTests.Scoped_token_flagged`, `Fine_grained_not_safe`
 - [x] **T-06** Token sent only to api.github.com (never to itch.io, GitLab, Gitea, Dolphin or download hosts). Source: `$ghHeaders` use. Proof: `ReleaseSourcesTests.GitHub_token_goes_only_to_api_github_com`, `Itch_request_never_carries_the_token`, `Gitea_Forgejo_source_resolves`, `TokenTests.Token_is_only_sent_to_the_GitHub_API`
-- [ ] **T-07** Expiry warning when 7 days or fewer are left. Source: `Show-LookupNotes`. Proof:
-- [ ] **T-08** Token page link opens GitHub's new-token page with the description filled and no scopes. Source: `$script:TokenPageUrl`. Proof:
+- [x] **T-07** Expiry warning when 7 days or fewer are left. Source: `Show-LookupNotes`. Proof: `LookupNotesTests.Expiring_token_warned_within_a_week`, `Expired_token_says_it_has_expired`
+- [ ] **T-08** Token page link opens GitHub's new-token page with the description filled and no scopes. Source: `$script:TokenPageUrl`. Proof: `GitHubTokenCheck.TokenPageUrl` opened by the wizard through `WebPage`; PC check pending
 
 ## 3. Release sources and cache
 
@@ -50,7 +50,7 @@ How to use it:
 - [x] **S-05** GitLab via `api`: tag, released date, page, asset links, description. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.GitLab_source_resolves`
 - [x] **S-06** itch.io: game page read with browser-like headers (identifies Wintainium), 20 s timeout; picks the upload matching `asset`, else the Windows one, else the first; version or file name as tag; UTC date; error when no downloads listed. Source: `Read-ItchPage`, `$itchHeaders`. Proof: `ItchPageTests` (all), `ReleaseSourcesTests.Itch_request_*`
 - [x] **S-07** Dolphin feed: `shortrev` tag, Windows x64 artifacts, changelog HTML turned into text, fixed download page. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.Dolphin_feed_resolves`
-- [ ] **S-08** `manual` source: no lookup, status "check manually". Source: `Get-AppRows`. Proof:
+- [x] **S-08** `manual` source: no lookup, status "check manually". Source: `Get-AppRows`. Proof: `StatusTests.Manual_check_manually`, `ReleaseSourcesTests.Manual_source_is_not_looked_up`, `ReleaseLookupTests.Manual_apps_are_not_looked_up`
 - [x] **S-09** Lookup address must be https, else the lookup fails without a request. Source: `Get-LatestRelease`, `Test-HttpsUrl`. Proof: `ReleaseSourcesTests.Http_address_is_not_requested`, `ReleaseLookupTests.Http_address_is_lookup_failed`
 - [x] **S-10** Cache answers reused for 60 minutes; Re-check all ignores the cache. Source: `Get-LatestCached`. Proof: `ReleaseLookupTests.Cache_is_reused_only_inside_the_window`, `Second_run_served_from_cache`
 - [x] **S-11** A failed lookup with a cached answer falls back to it, marks Latest "(cached)" and records why and when. Source: `Get-LatestCached`. Proof: `ReleaseLookupTests.Itch_403_falls_back_to_the_saved_answer`
@@ -74,7 +74,7 @@ How to use it:
 - [x] **U-01** Several methods: choose which (Enter = first, x = cancel). Source: `Update-App`. Proof: `InstallTests.Update_app_asks_which_method_when_there_are_several`
 - [x] **U-02** Update all: each outdated app asks Yes / No / Stop, uses its first method, skips the confirmations inside. Source: `Update-All`. Proof: `InstallTests.Update_all_asks_each_outdated_app_and_stops_when_asked`
 - [x] **U-03** "Nothing to update." when no app is outdated. Source: `Update-All`. Proof: `InstallTests.Update_all_asks_each_outdated_app_and_stops_when_asked`
-- [ ] **U-04** Updating an app that isn't UPDATE asks "Run its update anyway?". Source: `Start-SelectedUpdate`. Proof:
+- [x] **U-04** Updating an app that isn't UPDATE asks "Run its update anyway?". Source: `Start-SelectedUpdate`. Proof: `SessionTests.Update_of_a_row_without_update_asks_first`
 - [x] **U-05** `emudeck`: refuses while the app runs; explains and asks; runs EmuDeck's install function; shows seconds and MB in EmuDeck's temp folder; reports EmuDeck errors; says whether the exe changed (with the log folder if not). Source: `Invoke-EmuDeckInstall`. Proof: `InstallTests.EmuDeck_install_runs_its_function_and_reports_the_new_exe`, `EmuDeck_errors_and_an_unchanged_exe_are_reported`, `EmuDeck_refused_while_the_emulator_runs` (real EmuDeck run: PR 8 side-by-side)
 - [x] **U-06** `emudeck` without `emudeckFn` or without EmuDeck's backend: opens EmuDeck with instructions, or says where it wasn't found. Source: `Open-EmuDeck`. Proof: `InstallTests.EmuDeck_without_its_backend_opens_EmuDeck_with_instructions`
 - [x] **U-07** `inapp`: starts the program (or `launch`) in its own folder, shows `hint`; "Not found" when missing. Source: `Invoke-Method`. Proof: `InstallTests.Inapp_starts_the_program_or_its_launcher_and_shows_the_hint`
@@ -107,31 +107,31 @@ How to use it:
 
 ## 8. Add app
 
-- [ ] **A-01** URL recognised: GitHub (URL or `owner/repo`), itch.io game page, gitlab.com project (permalink/latest API), any other host as Gitea/Forgejo (`/api/v1/repos/.../releases/latest`); anything else cancelled with a message. Source: `Add-App`. Proof:
-- [ ] **A-02** Name asked, default = repo/game name. GitHub asks about pre-releases. Source: `Add-App`. Proof:
-- [ ] **A-03** itch.io: asks for the installed exe; update method `page`. Source: `Add-App`. Proof:
-- [ ] **A-04** Existing exe path: tracked with `download`, `page`. Source: `Add-App`. Proof:
-- [ ] **A-05** Existing folder (mod): reads the release, refuses an empty folder, tracks the first `.ips` (else first file), asks if the latest release is the one installed (No = `unknown`), methods `zip`, `page`. Source: `Add-App`. Proof:
-- [ ] **A-06** Install now: shows the latest release, asks the folder (default `<installRoot>\<name>`), asks before using a non-empty folder, offers only Windows files (zip/7z/exe/msi, not linux/appimage/macos/darwin/android/.sha256/.zsync), downloads with checksum, unpacks or copies. Source: `Add-App`. Proof:
-- [ ] **A-07** After installing: picks the main program (numbered choice when several, Enter = 1); no exe = asks if it's a mod/data pack (tracked by release) or uses top-level files; nothing unpacked = not added. Source: `Add-App`. Proof:
-- [ ] **A-08** Program gone 2 s after install = Windows Security help, not added. Source: `Add-App`. Proof:
-- [ ] **A-09** Saves an `asset` pattern with the version wildcarded, update method `zip` or `download` then `page`. Source: `Add-App`. Proof:
+- [x] **A-01** URL recognised: GitHub (URL or `owner/repo`), itch.io game page, gitlab.com project (permalink/latest API), any other host as Gitea/Forgejo (`/api/v1/repos/.../releases/latest`); anything else cancelled with a message. Source: `Add-App`. Proof: `AddAppTests.Links_are_recognised`, `Other_text_is_not_a_link`, `Not_a_link_is_cancelled`
+- [x] **A-02** Name asked, default = repo/game name. GitHub asks about pre-releases. Source: `Add-App`. Proof: `AddAppTests.Itch_tracks_an_installed_copy` (default name), `An_installed_exe_is_tracked_by_download` (name, pre-releases)
+- [x] **A-03** itch.io: asks for the installed exe; update method `page`. Source: `Add-App`. Proof: `AddAppTests.Itch_tracks_an_installed_copy`, `Itch_without_an_exe_is_cancelled`
+- [x] **A-04** Existing exe path: tracked with `download`, `page`. Source: `Add-App`. Proof: `AddAppTests.An_installed_exe_is_tracked_by_download`
+- [x] **A-05** Existing folder (mod): reads the release, refuses an empty folder, tracks the first `.ips` (else first file), asks if the latest release is the one installed (No = `unknown`), methods `zip`, `page`. Source: `Add-App`. Proof: `AddAppTests.An_installed_mod_folder_is_tracked_by_release`, `A_mod_folder_not_on_the_latest_release_is_unknown`, `An_empty_mod_folder_is_refused`
+- [x] **A-06** Install now: shows the latest release, asks the folder (default `<installRoot>\<name>`), asks before using a non-empty folder, offers only Windows files (zip/7z/exe/msi, not linux/appimage/macos/darwin/android/.sha256/.zsync), downloads with checksum, unpacks or copies. Source: `Add-App`. Proof: `AddAppTests.Install_now_unpacks_into_the_default_folder_and_saves_the_pattern`, `Install_now_copies_a_non_archive`, `A_folder_with_files_is_only_used_after_asking`, `Release_errors_are_reported` (checksums: `DownloadTests`)
+- [x] **A-07** After installing: picks the main program (numbered choice when several, Enter = 1); no exe = asks if it's a mod/data pack (tracked by release) or uses top-level files; nothing unpacked = not added. Source: `Add-App`. Proof: `AddAppTests.Several_programs_ask_which_is_main`, `A_data_pack_is_tracked_by_release`, `No_exe_and_not_a_pack_uses_the_top_files`
+- [x] **A-08** Program gone 2 s after install = Windows Security help, not added. Source: `Add-App`. Proof: `AddAppTests.A_program_removed_by_windows_security_is_not_added`
+- [x] **A-09** Saves an `asset` pattern with the version wildcarded, update method `zip` or `download` then `page`. Source: `Add-App`. Proof: `AddAppTests.Asset_pattern_wildcards_the_version`
 
 ## 9. Other row actions
 
-- [ ] **R-01** Launch: starts `launch` or the exe in its folder; non-program files (mods) open their folder instead; "Not found" messages. Source: `Start-App`. Proof:
-- [ ] **R-02** Open folder: opens the app folder in Explorer, or "Folder not found". Source: `BtnFolder`, context menu. Proof:
-- [ ] **R-03** Release page: opens the page, or "No release page is set for <app>". Source: `BtnPage`. Proof:
-- [ ] **R-04** Remove from list: asks first (files stay), removes the entry and its cache, logs it. Source: `Remove-AppEntry`. Proof:
-- [ ] **R-05** No row selected: "Select an app in the list first." Source: `Get-Selected`. Proof:
+- [x] **R-01** Launch: starts `launch` or the exe in its folder; non-program files (mods) open their folder instead; "Not found" messages. Source: `Start-App`. Proof: `SessionTests.Launch_starts_the_exe_in_its_folder`, `Launch_prefers_the_launch_field`, `Launch_of_a_mod_opens_its_folder`, `Launch_of_a_missing_exe_says_not_found`
+- [x] **R-02** Open folder: opens the app folder in Explorer, or "Folder not found". Source: `BtnFolder`, context menu. Proof: `SessionTests.Open_folder_or_says_it_is_missing_unless_quiet`
+- [x] **R-03** Release page: opens the page, or "No release page is set for <app>". Source: `BtnPage`. Proof: `SessionTests.Release_page_opens_or_says_none_is_set`, `Release_page_never_opens_a_non_https_link`
+- [x] **R-04** Remove from list: asks first (files stay), removes the entry and its cache, logs it. Source: `Remove-AppEntry`. Proof: `SessionTests.Remove_asks_then_drops_the_entry_and_its_cache_but_not_files`
+- [x] **R-05** No row selected: "Select an app in the list first." Source: `Get-Selected`. Proof: `SessionTests.No_selection_says_so`
 
 ## 10. Main window
 
 - [ ] **M-01** Title "Wintainium <version>", app icon, 1120x740, minimum 820x480, centred. Source: `$mainXaml`. Proof:
 - [ ] **M-02** Header "Wintainium" and summary line: "All N apps are up to date - checked HH:mm" (green) or "N updates available - N need attention - N apps - checked HH:mm" (amber when updates, red when only problems). Source: `Update-Grid`. Proof:
 - [ ] **M-03** Toolbar in this order with these icons: Update selected (primary), Update all, What's new, Launch, Release page, Open folder, Add app, Refresh, Re-check all (tooltip), Scan (tooltip), Setup (tooltip). Source: `$mainXaml`. Proof:
-- [ ] **M-04** Search box with "Search apps..." hint; filters by name, case-insensitive. Source: `Test-RowVisible`, `Update-Filter`. Proof:
-- [ ] **M-05** "Only show updates" hides rows that are up to date. Source: `Test-RowVisible`. Proof:
+- [ ] **M-04** Search box with "Search apps..." hint; filters by name, case-insensitive. Source: `Test-RowVisible`, `Update-Filter`. Proof: filter: `SessionTests.Search_and_only_updates_filter_rows`; hint: PC check pending
+- [x] **M-05** "Only show updates" hides rows that are up to date. Source: `Test-RowVisible`. Proof: `SessionTests.Search_and_only_updates_filter_rows`, `Only_updates_keeps_rows_that_need_attention`
 - [ ] **M-06** Hint text "Double-click to update - right-click for more - F5 to refresh". Source: `$mainXaml`. Proof:
 - [ ] **M-07** Grid: columns App, Status, Installed, Latest (ellipsis + tooltip), Released, Update via; single row selection; read-only; alternating row colours; selection kept across refreshes. Source: `$mainXaml`, `Update-Grid`. Proof:
 - [ ] **M-08** Status pills: UPDATE amber, up to date green, lookup failed / rate limited / token rejected / exe not found red, site busy orange, others grey. Source: `$mainXaml`. Proof:
@@ -150,13 +150,13 @@ How to use it:
 - [ ] **K-03** Delete (grid focused) = remove from list (asks first). Source: `KeyDown`. Proof:
 - [ ] **K-04** Right-click selects the row under the mouse, then opens the menu. Source: `PreviewMouseRightButtonDown`. Proof:
 - [ ] **K-05** Menu: Update, What's new, Launch, separator, Open release page, Open folder, separator, Remove from list... Source: context menu. Proof:
-- [ ] **K-06** "Show Wintainium in gold" (checkable) only on the self row; saves `goldSelf` and updates the row at once. Source: context menu. Proof:
+- [ ] **K-06** "Show Wintainium in gold" (checkable) only on the self row; saves `goldSelf` and updates the row at once. Source: context menu. Proof: saving: `SessionTests.Gold_is_saved_and_applied_to_the_self_row`; menu: PC check pending
 
 ## 12. Dialogs
 
-- [ ] **G-01** Prompt dialog: last 12 log lines as context (hidden when none), question, Yes/No buttons for yes/no questions (Stop as a third when offered), text box with OK (default) / Cancel otherwise, focus in the text box. Source: `Show-Prompt`. Proof:
+- [ ] **G-01** Prompt dialog: last 12 log lines as context (hidden when none), question, Yes/No buttons for yes/no questions (Stop as a third when offered), text box with OK (default) / Cancel otherwise, focus in the text box. Source: `Show-Prompt`. Proof: answers: `SessionTests.Typed_choices_are_read_like_v030`, `Closing_the_choice_dialog_cancels`; window: PC check pending
 - [ ] **G-02** Every question asked today has a dialog with the same text (prompt list below). Source: `Read-Host` calls. Proof:
-- [ ] **G-03** What's new: title "<app>  <latest>", "Released <date> - you have <installed>", notes with markdown `**` and `#` stripped, Open release page, Close (Esc). Fallback texts when there are no notes. Source: `Show-Notes`, `Get-NotesText`. Proof:
+- [ ] **G-03** What's new: title "<app>  <latest>", "Released <date> - you have <installed>", notes with markdown `**` and `#` stripped, Open release page, Close (Esc). Fallback texts when there are no notes. Source: `Show-Notes`, `Get-NotesText`. Proof: text: `SessionTests.Notes_strip_markdown_and_show_the_dates`, `Notes_fall_back_when_there_are_none`; window: PC check pending
 
 Questions asked today (all become dialogs):
 
@@ -188,21 +188,21 @@ Questions asked today (all become dialogs):
 - [ ] **N-01** Window "Wintainium setup", 660x600, "Step N of 5", Back (hidden on step 1), Next / Finish, Cancel. Source: `$wizardXaml`, `Set-WizardPage`. Proof:
 - [ ] **N-02** Step 1 welcome text and the "Before you use it" box (wording updated for the exe, see C-03). Source: `$wizardXaml`. Proof:
 - [ ] **N-03** Step 2 folders: install and download boxes filled with current values, Browse... pickers starting at the current folder. Source: `Select-WizardFolder`. Proof:
-- [ ] **N-04** Step 3 token: explanation, green "no permissions" box, three steps, Open GitHub, hidden-text box, Check and save; results: saved (limit, expiry), not safe / rejected ("Nothing was saved."); current state text when a token exists or not. Source: `CheckToken`, `Update-WizardTokenStatus`. Proof:
-- [ ] **N-05** Step 4 scan: Scan this PC opens the scan window, also scanning the install folder from step 2; result text with the number added. Source: `ScanNow`. Proof:
+- [ ] **N-04** Step 3 token: explanation, green "no permissions" box, three steps, Open GitHub, hidden-text box, Check and save; results: saved (limit, expiry), not safe / rejected ("Nothing was saved."); current state text when a token exists or not. Source: `CheckToken`, `Update-WizardTokenStatus`. Proof: texts and saving: `SetupAndScanTests.Wizard_texts`, `A_safe_token_is_saved`, `A_scoped_token_is_not_saved`; window: PC check pending
+- [ ] **N-05** Step 4 scan: Scan this PC opens the scan window, also scanning the install folder from step 2; result text with the number added. Source: `ScanNow`. Proof: text: `SetupAndScanTests.Wizard_texts`; window: PC check pending
 - [ ] **N-06** Step 5 shortcuts: Desktop and Start menu (both ticked), pin-to-taskbar tip, "You're set" text. Source: `$wizardXaml`. Proof:
-- [ ] **N-07** Finish saves folders and `setupDone`, creates the ticked shortcuts (with icon, description and taskbar ID), logs "Setup saved...". Shortcut errors logged, not fatal. Source: `Complete-Wizard`. Proof:
-- [ ] **N-08** Cancel or closing still sets `setupDone`, so the wizard doesn't open on every start. Source: `Show-SetupWizard`. Proof:
+- [ ] **N-07** Finish saves folders and `setupDone`, creates the ticked shortcuts (with icon, description and taskbar ID), logs "Setup saved...". Shortcut errors logged, not fatal. Source: `Complete-Wizard`. Proof: saving: `SetupAndScanTests.Finish_saves_folders_and_setup_done`; shortcuts: PC check pending (taskbar ID comes with PR 10)
+- [x] **N-08** Cancel or closing still sets `setupDone`, so the wizard doesn't open on every start. Source: `Show-SetupWizard`. Proof: `SetupAndScanTests.Closing_the_wizard_still_counts_as_seen`
 
 ## 14. Scan window
 
 - [ ] **C-01** Window "Find apps you already have", 820x660 (min 640x420), intro text, scan starts when shown, "Scanning your PC... N s" while it runs, window stays responsive, closing stops the scan. Source: `Show-ScanWindow`, `Start-PcScan`. Proof:
 - [ ] **C-02** Row per candidate: tick, editable name, source line, path, note; ticked by default for recognized/found apps. Source: `Add-ScanRow`. Proof:
-- [ ] **C-03** Downloads without an installed program: amber edge and text, unticked, Locate .exe... button; ticking one opens Locate; Locate fills the path and ticks it. Source: `Add-ScanRow`, `Invoke-ScanLocate`. Proof:
-- [ ] **C-04** Don't show again: hides the row now and in future scans (`scanIgnore`); Show hidden (N) clears the list and rescans. Source: `Hide-ScanRow`, `SHidden`. Proof:
+- [ ] **C-03** Downloads without an installed program: amber edge and text, unticked, Locate .exe... button; ticking one opens Locate; Locate fills the path and ticks it. Source: `Add-ScanRow`, `Invoke-ScanLocate`. Proof: `SetupAndScanTests.Locate_fills_the_program_and_ticks_the_row`; window: PC check pending
+- [x] **C-04** Don't show again: hides the row now and in future scans (`scanIgnore`); Show hidden (N) clears the list and rescans. Source: `Hide-ScanRow`, `SHidden`. Proof: `SetupAndScanTests.Hide_and_show_hidden_edit_scan_ignore` (buttons: PC check pending)
 - [ ] **C-05** Scan another folder...: adds a folder and rescans; footer lists extra folders. Source: `SFolder`. Proof:
-- [ ] **C-06** Summary: "Found N apps." plus the Locate hint, or "Nothing new found..." in green. Mod count footer. Source: `Update-ScanSummary`, `Show-ScanResults`. Proof:
-- [ ] **C-07** Add selected (N): disabled when nothing is ticked or a scan runs; adds ticked rows with a program, makes names unique ("Name (2)"), saves, logs "Added N apps from the scan.", closes. Source: `Add-ScanSelection`, `Update-ScanCount`. Proof:
+- [x] **C-06** Summary: "Found N apps." plus the Locate hint, or "Nothing new found..." in green. Mod count footer. Source: `Update-ScanSummary`, `Show-ScanResults`. Proof: `SetupAndScanTests.Summary_texts`, `Footer_lists_mods_and_extra_folders`
+- [ ] **C-07** Add selected (N): disabled when nothing is ticked or a scan runs; adds ticked rows with a program, makes names unique ("Name (2)"), saves, logs "Added N apps from the scan.", closes. Source: `Add-ScanSelection`, `Update-ScanCount`. Proof: `SetupAndScanTests.Add_selected_adds_ticked_rows_with_a_program_and_unique_names`, `Nothing_ticked_saves_nothing`; button: PC check pending
 - [ ] **C-08** Scan failure shows "The scan didn't finish: <why>" in red. Source: scan timer. Proof:
 
 ## 15. PC scan engine (Find-Sources)
@@ -220,41 +220,41 @@ Questions asked today (all become dialogs):
 
 ## 16. Shortcuts and taskbar
 
-- [ ] **H-01** Own taskbar button: AppUserModelID `Ay1man2.Wintainium` on the process, window and shortcuts, so pinned icons and the open window share one button; "Pin to taskbar" pins Wintainium. Source: `WintainiumShell`. Proof:
-- [ ] **H-02** Shortcut and window icon from the exe (never holds a loose `icon.ico` open). Source: `Get-ShellIcon`. Proof:
+- [ ] **H-01** Own taskbar button: AppUserModelID `Ay1man2.Wintainium` on the process, window and shortcuts, so pinned icons and the open window share one button; "Pin to taskbar" pins Wintainium. Source: `WintainiumShell`. Proof: `WindowsIntegration.SetProcessAppId`, shortcuts via `ShellLink` with System.AppUserModel.ID; PC check pending
+- [ ] **H-02** Shortcut and window icon from the exe (never holds a loose `icon.ico` open). Source: `Get-ShellIcon`. Proof: shortcut icon = the exe itself; window icon from the embedded resource; PC check pending
 
 ## 17. Install, update and uninstall (launcher)
 
-- [ ] **I-01** Run on its own: installs per user to `%LOCALAPPDATA%\Programs\Wintainium` (no admin), writes `installed-version.txt`, starts the installed copy and exits. Source: L `Main`, `Install`. Proof:
-- [ ] **I-02** Newer exe updates the installed copy; older never downgrades; user files (list, settings, token, cache) never touched. Source: L `Main`, `Install`. Proof:
-- [ ] **I-03** Installed copy open during an update: "close it, then Retry" with Retry/Cancel. Source: L `Install`. Proof:
-- [ ] **I-04** Installed exe written fresh, so the download mark isn't copied to it. Source: L `Install`. Proof:
-- [ ] **I-05** Settings > Apps entry (HKCU `...\Uninstall\Wintainium`): name, version, publisher, icon, location, uninstall command, about link, no modify/repair, size. Source: L `Register`. Proof:
-- [ ] **I-06** `--uninstall`: only the install folder; refuses when no install; waits for an open window (Retry); asks to remove, then whether to delete the list/settings/token/cache; removes Desktop/Start shortcuts that point into it, the registry entry, then the files after exit. Source: L `Uninstall`. Proof:
-- [ ] **I-07** `--install-only`: installs or updates without starting, no message boxes, result in the exit code. Source: L `Main`. Proof:
-- [ ] **I-08** Portable copy runs in place and installs nothing. Source: L `TrustedScriptFolder`. Proof:
-- [ ] **I-09** Startup errors shown in a message box. Source: L `Run`. Proof:
+- [ ] **I-01** Run on its own: installs per user to `%LOCALAPPDATA%\Programs\Wintainium` (no admin), writes `installed-version.txt`, starts the installed copy and exits. Source: L `Main`, `Install`. Proof: decision and files: `SelfInstallerTests.A_download_with_no_install_installs`, `Install_writes_the_exe_and_marker_and_keeps_user_files`; start of the installed copy: PC check pending
+- [x] **I-02** Newer exe updates the installed copy; older never downgrades; user files (list, settings, token, cache) never touched. Source: L `Main`, `Install`. Proof: `SelfInstallerTests.A_download_updates_only_an_older_install`, `Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [ ] **I-03** Installed copy open during an update: "close it, then Retry" with Retry/Cancel. Source: L `Install`. Proof: `SelfStart.Install` (OK/Cancel box: WPF has no Retry button); PC check pending
+- [ ] **I-04** Installed exe written fresh, so the download mark isn't copied to it. Source: L `Install`. Proof: exe written by stream copy to a new file (`SelfInstaller.Install`); mark check: PC check pending
+- [ ] **I-05** Settings > Apps entry (HKCU `...\Uninstall\Wintainium`): name, version, publisher, icon, location, uninstall command, about link, no modify/repair, size. Source: L `Register`. Proof: `WindowsIntegration.Register`; `SelfInstallerTests.Size_and_version_for_settings_apps`; PC check pending
+- [ ] **I-06** `--uninstall`: only the install folder; refuses when no install; waits for an open window (Retry); asks to remove, then whether to delete the list/settings/token/cache; removes Desktop/Start shortcuts that point into it, the registry entry, then the files after exit. Source: L `Uninstall`. Proof: `SelfInstallerTests.Removal_keeps_user_files_unless_asked`; flow: PC check pending
+- [ ] **I-07** `--install-only`: installs or updates without starting, no message boxes, result in the exit code. Source: L `Main`. Proof: `SelfStart.Run` (no boxes when quiet); PC check pending
+- [x] **I-08** Portable copy runs in place and installs nothing. Source: L `TrustedScriptFolder`. Proof: `SelfInstallerTests.A_portable_copy_runs_in_place_and_installs_nothing`
+- [ ] **I-09** Startup errors shown in a message box. Source: L `Run`. Proof: startup errors use message boxes in `SelfStart`; PC check pending
 - [ ] **I-10** Self-update: an installed copy updates by downloading `Wintainium.exe`, checking it against `Wintainium.exe.sha256` and running it. Release asset names stay the same, so v0.3.0 installs pick up v0.4.0. Source: P-02, release. Proof:
-- [ ] **I-11** A v0.3.0 install upgrades in place to v0.4.0: old script files removed, user files kept, same registry entry. Source: new. Proof:
+- [x] **I-11** A v0.3.0 install upgrades in place to v0.4.0: old script files removed, user files kept, same registry entry. Source: new. Proof: `SelfInstallerTests.Upgrading_a_v030_install_removes_its_scripts`, `A_download_updates_only_an_older_install` (0.3.0 row); same registry key and data files in the same folder
 
 ## 18. Command line
 
 Decided for v0.4.0 (see port plan): keep the window as the main way in, and a few flags for people
 who know what they're doing.
 
-- [ ] **L-01** `Wintainium.exe` with no arguments opens the window. Source: L, `gui`. Proof:
-- [ ] **L-02** `--list` prints the table (App, Status, Installed, Latest, Released, Update via, number of updates, lookup notes) to the console it was started from. Source: `list`, `Show-Table`. Proof:
-- [ ] **L-03** `--setup` opens the window with the setup wizard first. Source: `setup`. Proof:
-- [ ] **L-04** `--uninstall` and `--install-only` (I-06, I-07). Source: L. Proof:
-- [ ] **L-05** `--data <folder>` uses the data files in that folder (replaces `-Config`). Source: `-Config`. Proof:
-- [ ] **L-06** Grace days and cache minutes kept as optional settings keys (defaults 3 and 60), replacing `-GraceDays` and `-CacheMinutes`. Source: `param`. Proof:
-- [ ] **L-07** EmuDeck location: default `%LOCALAPPDATA%\Programs\EmuDeck\EmuDeck.exe` (replaces `-EmuDeckExe`). Source: `param`. Proof:
+- [ ] **L-01** `Wintainium.exe` with no arguments opens the window. Source: L, `gui`. Proof: `App.OnStartup`; PC check pending
+- [ ] **L-02** `--list` prints the table (App, Status, Installed, Latest, Released, Update via, number of updates, lookup notes) to the console it was started from. Source: `list`, `Show-Table`. Proof: table: `SessionTests.Table_matches_the_v030_layout`; console output: PC check pending
+- [ ] **L-03** `--setup` opens the window with the setup wizard first. Source: `setup`. Proof: `MainWindow` opens the wizard first with `--setup`; PC check pending
+- [ ] **L-04** `--uninstall` and `--install-only` (I-06, I-07). Source: L. Proof: `SelfStart.Run` / `SelfStart.Uninstall` (I-06, I-07); PC check pending
+- [x] **L-05** `--data <folder>` uses the data files in that folder (replaces `-Config`). Source: `-Config`. Proof: `SessionTests.Options_are_read`, `Bad_options_are_explained`
+- [x] **L-06** Grace days and cache minutes kept as optional settings keys (defaults 3 and 60), replacing `-GraceDays` and `-CacheMinutes`. Source: `param`. Proof: `SettingsTests.Grace_days_and_cache_minutes_can_be_set`, `Grace_and_cache_minutes_below_one_or_too_big_use_the_default`
+- [x] **L-07** EmuDeck location: default `%LOCALAPPDATA%\Programs\EmuDeck\EmuDeck.exe` (replaces `-EmuDeckExe`). Source: `param`. Proof: `SessionTests.Folders_default_and_follow_settings`
 
 ## 19. Release build
 
-- [ ] **B-01** Four assets: `Wintainium.exe`, `Wintainium.exe.sha256`, `Wintainium-<ver>-portable.zip`, `Wintainium-<ver>-portable.zip.sha256` (`<hash>  <name>` format). Source: `build/Build-Release.ps1`. Proof:
-- [ ] **B-02** Exe version info (product, description, company, copyright GPL-3.0 link, version) and icon. Source: L assembly attributes. Proof:
-- [ ] **B-03** Built by CI from a tag into a draft release with build attestations; the maintainer tests that exe before publishing. Source: new (port plan). Proof:
+- [ ] **B-01** Four assets: `Wintainium.exe`, `Wintainium.exe.sha256`, `Wintainium-<ver>-portable.zip`, `Wintainium-<ver>-portable.zip.sha256` (`<hash>  <name>` format). Source: `build/Build-Release.ps1`. Proof: `build/Build-Release.ps1` and the release job in `.github/workflows/build.yml`; checked on the first tag
+- [ ] **B-02** Exe version info (product, description, company, copyright GPL-3.0 link, version) and icon. Source: L assembly attributes. Proof: `Directory.Build.props` (product, company, copyright, version) and `ApplicationIcon`; PC check pending
+- [ ] **B-03** Built by CI from a tag into a draft release with build attestations; the maintainer tests that exe before publishing. Source: new (port plan). Proof: release job in `.github/workflows/build.yml` (tag must match `<Version>`, attest-build-provenance, `gh release create --draft`); checked on the first tag
 
 ---
 
@@ -267,17 +267,18 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [x] **X-02** Unpacked programs and scripts keep the download mark. (#2) Proof: `InstallTests.Unpacked_programs_keep_the_mark`
 - [x] **X-03** Checksum file present but unusable = download refused, not "not verified". Wording "integrity check". (#4) Proof: `DownloadTests.Unusable_checksum_refuses`
 - [x] **X-04** `GITHUB_TOKEN` used only if it passes the no-scope check. (#6) Proof: `TokenTests.GITHUB_TOKEN_is_used_only_when_it_has_no_scopes`
-- [ ] **X-05** Usernames/passwords removed from any URL shown or saved. (#7) Proof:
+- [x] **X-05** Usernames/passwords removed from any URL shown or saved. (#7) Proof: `LinksTests` (StripUserInfo), `AddAppTests.Passwords_in_a_link_are_dropped`; downloads and WebPage show the stripped link
 - [x] **X-06** `emudeckFn` must match `^[A-Za-z0-9]+_install$`. (#8) Proof: `InstallTests.EmuDeck_function_names_are_checked`, `Bad_EmuDeck_function_not_run`
-- [ ] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof:
+- [x] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof: `SelfInstallerTests.Arguments_are_quoted_the_windows_way`
 - [x] **X-08** Zip updates unpack into the right folder when the exe sits in a subfolder. (correctness 1) Proof: `InstallTests.Exe_in_subfolder_updates_the_right_folder`
 - [x] **X-09** Major-version jumps compared by number, not by date. (correctness 2) Proof: `VersionCompareTests.Older_by_number`, listed in `StatusGoldenTests.Deviations`. Only when both versions use the same kind of numbering (neither or both date-style, majors at most 3 apart); otherwise the date decides as before (`VersionCompareTests.Different_schemes_compare_only_when_alike`, golden "Date-style tags" and "Large major gap" cases).
 - [x] **X-10** Exact version match instead of substring (12.1.0 no longer "contains" 2.1). (correctness 3) Proof: `VersionCompareTests.Same_release_needs_the_whole_number`, listed in `StatusGoldenTests.Deviations`
 - [x] **X-11** Atomic writes for every data file; a broken app list is restored from `.bak` with a clear message instead of stopping startup. (correctness 4) Proof: `AppListTests.Saves_utf8_without_bom_and_keeps_a_backup`, `Broken_list_is_restored_from_the_backup`, `Broken_list_without_backup_is_reported_and_left_alone`
 - [x] **X-12** Old backups pruned; files a new zip release no longer has are reported, not deleted. (correctness 5) Proof: `InstallTests.Old_backups_pruned`, `InstallTests.Leftover_files_are_kept_and_reported` (PR 6). Intentional change (decided by the owner): leftover files are never deleted, because they can be saves or settings; after an update the app lists them with their folder and offers to open it.
-- [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof:
-- [ ] **X-14** Closing any yes/no dialog with X or Alt+F4 = No (already true in v0.3.0's window; now true everywhere). (correctness 7) Proof:
-- [ ] **X-15** Wizard welcome text describes the exe instead of "an unsigned PowerShell script ... Wintainium.ps1". Proof:
+- [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof: per-request timeouts in `ReleaseSources`, `GitHubTokenCheck`, `Downloader`; lookups 6 at a time (`ReleaseLookup.MaxParallel`) on a worker thread (`MainWindow.RefreshGridAsync`); PC check pending
+- [ ] **X-14** Closing any yes/no dialog with X or Alt+F4 = No (already true in v0.3.0's window; now true everywhere). (correctness 7) Proof: `PromptDialog` starts at No and only Yes sets Yes; uninstall boxes treat close as Cancel/No; PC check pending
+- [ ] **X-15** Wizard welcome text describes the exe instead of "an unsigned PowerShell script ... Wintainium.ps1". Proof: `src/Wintainium.App/Ui/SetupWizard.xaml` (step 1); PC check pending
+- [x] **X-16** Cancel on any Add app question stops Add app (v0.3.0 took it as Enter, so Cancel on "Install folder" installed into the default folder). Files it already unpacked or copied, folders left empty and the download are removed again; files that were already in the folder stay. The same clean-up runs when an install-now add fails. (user decision) Proof: `AddAppTests.Cancel_on_the_link_stops`, `Cancel_on_the_install_folder_installs_nothing`, `Cancel_after_installing_removes_what_it_installed_but_not_files_that_were_there`
 
 ## Dropped on purpose
 
@@ -300,12 +301,12 @@ longer applies says why instead of naming a test.
 
 ### Test-Dialogs.ps1
 
-- [ ] Show-Prompt found in the script -> no longer applies (C# dialogs are typed code)
-- [ ] Yes/No box closed with X answers No ->
-- [ ] yes-default question closed with X answers No ->
-- [ ] Stop question closed with X answers No (skip) ->
-- [ ] Yes/No box shows Yes and No buttons ->
-- [ ] text box closed with X answers nothing ->
+- [x] Show-Prompt found in the script -> no longer applies (C# dialogs are typed code)
+- [ ] Yes/No box closed with X answers No -> PC check (WPF `PromptDialog`, X-14)
+- [ ] yes-default question closed with X answers No -> PC check (WPF `PromptDialog`, X-14)
+- [ ] Stop question closed with X answers No (skip) -> PC check (WPF `PromptDialog`, X-14)
+- [ ] Yes/No box shows Yes and No buttons -> PC check (WPF `PromptDialog`, X-14)
+- [ ] text box closed with X answers nothing -> PC check (WPF `PromptDialog`, X-14)
 
 ### Test-Downloads.ps1
 
@@ -333,13 +334,13 @@ longer applies says why instead of naming a test.
 - [x] http checksum file not fetched -> `DownloadTests.Http_checksum_not_fetched`
 - [x] file:// download refused outside tests -> `DownloadTests.Non_https_download_refused`
 - [x] unzip flattens the single top folder -> `InstallTests.Unzip_flattens_single_top_folder`
-- [ ] Add-App: Forgejo URL -> gitea api ->
-- [ ] Add-App: installed into InstallRoot\name ->
-- [ ] Add-App: AppImage filtered out (single choice, no prompt) ->
-- [ ] Add-App: checksum verified during install ->
-- [ ] Add-App: version wildcarded in asset pattern ->
-- [ ] Add-App: update method zip ->
-- [ ] Add-App parses <url> (each case) ->
+- [x] Add-App: Forgejo URL -> gitea api -> `AddAppTests.Links_are_recognised` (self-hosted Forgejo case)
+- [x] Add-App: installed into InstallRoot\name -> `AddAppTests.Install_now_unpacks_into_the_default_folder_and_saves_the_pattern`
+- [x] Add-App: AppImage filtered out (single choice, no prompt) -> `AddAppTests.Install_now_unpacks_into_the_default_folder_and_saves_the_pattern`
+- [x] Add-App: checksum verified during install -> `AddAppTests.Install_now_checks_the_published_checksum`
+- [x] Add-App: version wildcarded in asset pattern -> `AddAppTests.Asset_pattern_wildcards_the_version`
+- [x] Add-App: update method zip -> `AddAppTests.Install_now_unpacks_into_the_default_folder_and_saves_the_pattern`
+- [x] Add-App parses <url> (each case) -> `AddAppTests.Links_are_recognised`, `AddAppTests.Other_text_is_not_a_link`
 - [x] quarantine: names the detection -> `DownloadTests.Quarantine_help`
 - [x] quarantine: warns against Allow on device -> `DownloadTests.Quarantine_help`
 - [x] quarantine: shows published SHA-256 -> `DownloadTests.Quarantine_help`
@@ -347,7 +348,7 @@ longer applies says why instead of naming a test.
 - [x] quarantine: Microsoft form opened -> `DownloadTests.Quarantine_help`
 - [x] quarantine: nothing returned to install -> `DownloadTests.Quarantine_help`
 - [x] remove: only that app removed -> `AppListTests.Remove_takes_only_that_app (list part; the dialog is covered in PR 9)`
-- [ ] remove: answering No keeps it ->
+- [x] remove: answering No keeps it -> `SessionTests.Remove_asks_then_drops_the_entry_and_its_cache_but_not_files`
 - [x] late quarantine: no crash -> `DownloadTests.Late_quarantine_reported`
 - [x] late quarantine: reported as removed -> `DownloadTests.Late_quarantine_reported`
 - [x] page link: https opened -> `DownloadTests.Page_link_opened_parsed`
@@ -366,34 +367,34 @@ longer applies says why instead of naming a test.
 - [x] itch: no version -> file name -> `ItchPageTests.No_version_uses_file_name`
 - [x] itch: empty page throws -> `ItchPageTests.Empty_page_throws`
 - [x] itch: empty page throws (shown as lookup failed) -> `ItchPageTests.Empty_page_throws`
-- [ ] add-app: itch URL -> itch source ->
+- [x] add-app: itch URL -> itch source -> `AddAppTests.Links_are_recognised`, `AddAppTests.Itch_tracks_an_installed_copy`
 
 ### Test-Launch.ps1
 
-- [ ] starts with -File from another folder -> no longer applies (PowerShell start-up quirk); replaced by: exe started from another folder finds its data files
+- [ ] starts with -File from another folder -> no longer applies (PowerShell start-up quirk); replaced by: exe started from another folder finds its data files (PC check, L-01)
 - [x] app list created next to the script -> `AppListTests.Missing_list_is_created_empty_with_a_notice`
-- [ ] empty list shows 0 updates ->
+- [x] empty list shows 0 updates -> `SessionTests.Empty_list_shows_0_updates`
 
 ### Test-Launcher.ps1
 
-- [ ] installs from a lone download ->
-- [ ] installs the scripts and the icon -> becomes: installs the exe
-- [ ] records the installed version ->
-- [ ] newer download updates the installed copy ->
-- [ ] update keeps your app list and settings ->
-- [ ] installed exe is the new one ->
-- [ ] older download does not downgrade ->
-- [ ] git clone: runs its own scripts, left untouched -> no longer applies (no scripts); replaced by: portable/clone folder runs in place
-- [ ] untouched portable zip: runs in place ->
-- [ ] planted script ignored, own copy installed -> no longer applies (no scripts are run)
-- [ ] planted script with a planted marker ignored -> no longer applies (no scripts are run)
-- [ ] .git file pointing at another repo ignored -> no longer applies (no scripts are run)
-- [ ] planted .git file ignored, own copy installed -> no longer applies (no scripts are run)
-- [ ] .git file pointing at a network share ignored -> no longer applies (no scripts are run)
-- [ ] .git folder without HEAD ignored -> no longer applies (no scripts are run)
-- [ ] genuine script beside a changed helper not trusted -> no longer applies (no scripts are run)
-- [ ] installed copy refreshes stale scripts -> becomes: v0.3.0 install upgraded, old scripts removed (I-11)
-- [ ] launcher without scripts reports an error -> no longer applies
+- [x] installs from a lone download -> `SelfInstallerTests.A_download_with_no_install_installs`
+- [x] installs the scripts and the icon -> becomes: installs the exe: `SelfInstallerTests.Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [x] records the installed version -> `SelfInstallerTests.Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [x] newer download updates the installed copy -> `SelfInstallerTests.A_download_updates_only_an_older_install`
+- [x] update keeps your app list and settings -> `SelfInstallerTests.Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [x] installed exe is the new one -> `SelfInstallerTests.Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [x] older download does not downgrade -> `SelfInstallerTests.A_download_updates_only_an_older_install`, `Without_a_marker_the_installed_exe_version_decides`
+- [x] git clone: runs its own scripts, left untouched -> no longer applies (no scripts); replaced by: portable/clone folder runs in place: `SelfInstallerTests.A_portable_copy_runs_in_place_and_installs_nothing`, `A_development_build_always_runs_in_place`
+- [x] untouched portable zip: runs in place -> `SelfInstallerTests.A_portable_copy_runs_in_place_and_installs_nothing`, `An_unpacked_v030_portable_zip_runs_in_place`; planted portable files: `Portable_files_in_a_downloads_folder_are_not_trusted`
+- [x] planted script ignored, own copy installed -> no longer applies (no scripts are run)
+- [x] planted script with a planted marker ignored -> no longer applies (no scripts are run)
+- [x] .git file pointing at another repo ignored -> no longer applies (no scripts are run)
+- [x] planted .git file ignored, own copy installed -> no longer applies (no scripts are run)
+- [x] .git file pointing at a network share ignored -> no longer applies (no scripts are run)
+- [x] .git folder without HEAD ignored -> no longer applies (no scripts are run)
+- [x] genuine script beside a changed helper not trusted -> no longer applies (no scripts are run)
+- [x] installed copy refreshes stale scripts -> becomes: v0.3.0 install upgraded, old scripts removed (I-11): `SelfInstallerTests.Upgrading_a_v030_install_removes_its_scripts`
+- [x] launcher without scripts reports an error -> no longer applies
 
 ### Test-Lookups.ps1
 
@@ -420,32 +421,32 @@ longer applies says why instead of naming a test.
 - [x] empty token reported -> `TokenTests.Empty_token_reported`
 - [x] install folder from settings file -> `SettingsTests.Install_folder_from_settings_file`
 - [x] download folder from settings file -> `SettingsTests.Download_folder_from_settings_file`
-- [ ] command-line option still wins -> becomes: `--data` folder wins over the default
+- [x] command-line option still wins -> becomes: `--data` folder wins over the default: `SessionTests.Options_are_read`; `App.OnStartup` uses `--data` before the exe folder
 
 ### Test-Mods.ps1
 
-- [ ] mod: added instead of "Nothing was unpacked" ->
-- [ ] mod: unpacked with its own folder kept ->
-- [ ] mod: tracked by the .ips file ->
-- [ ] mod: installDir is the install folder ->
-- [ ] mod: installedTag recorded ->
-- [ ] mod: updates by zip, then page ->
-- [ ] mod: asset pattern matches the next version ->
-- [ ] mod: same release is up to date ->
-- [ ] mod: Installed column shows the release tag ->
-- [ ] mod: new release flagged UPDATE ->
+- [x] mod: added instead of "Nothing was unpacked" -> `AddAppTests.A_data_pack_is_tracked_by_release`
+- [x] mod: unpacked with its own folder kept -> `InstallTests.Unzip_flattens_single_top_folder` (only the single top folder goes; the folders inside it stay)
+- [x] mod: tracked by the .ips file -> `AddAppTests.A_data_pack_is_tracked_by_release`
+- [x] mod: installDir is the install folder -> `AddAppTests.A_data_pack_is_tracked_by_release`
+- [x] mod: installedTag recorded -> `AddAppTests.A_data_pack_is_tracked_by_release`
+- [x] mod: updates by zip, then page -> `AddAppTests.An_installed_mod_folder_is_tracked_by_release`
+- [x] mod: asset pattern matches the next version -> `AddAppTests.Asset_pattern_wildcards_the_version`
+- [x] mod: same release is up to date -> `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod same release")
+- [x] mod: Installed column shows the release tag -> `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod same release")
+- [x] mod: new release flagged UPDATE -> `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod new release")
 - [x] mod update: new files in place -> `InstallTests.Mod_update`
 - [x] mod update: nothing unpacked into patches\ -> `InstallTests.Mod_update`
 - [x] mod update: folder backed up first -> `InstallTests.Mod_update`
 - [x] mod update: installedTag saved -> `InstallTests.Mod_update`
-- [ ] mod update: up to date afterwards ->
+- [x] mod update: up to date afterwards -> `InstallTests.Mod_update` (tag saved) with `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod same release")
 - [x] mod update cancelled: tag unchanged -> `InstallTests.Mod_update_cancelled`
-- [ ] mod: Launch opens the folder, does not run the .ips ->
+- [x] mod: Launch opens the folder, does not run the .ips -> `SessionTests.Launch_of_a_mod_opens_its_folder`
 - [x] mod: Get-AppFolder returns installDir -> `InstallTests.App_folder_is_installDir`
-- [ ] existing folder: tracked by release ->
-- [ ] existing folder, unknown release: shows UPDATE ->
-- [ ] not a mod: refused when no top-level program ->
-- [ ] plain app: old .exe still flagged UPDATE ->
+- [x] existing folder: tracked by release -> `AddAppTests.An_installed_mod_folder_is_tracked_by_release`
+- [x] existing folder, unknown release: shows UPDATE -> `AddAppTests.A_mod_folder_not_on_the_latest_release_is_unknown` with `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod unknown release")
+- [x] not a mod: refused when no top-level program -> `AddAppTests.Not_a_pack_and_nothing_at_the_top_is_refused`
+- [x] plain app: old .exe still flagged UPDATE -> `StatusTests.GhOld_flagged_update`
 
 ### Test-Scan.ps1
 
@@ -476,14 +477,14 @@ longer applies says why instead of naming a test.
 - [x] catalog extras kept (launch, hint) -> `ScanTests.Full_scan`
 - [x] with EmuDeck installed, updates go through EmuDeck -> `ScanTests.Full_scan`
 - [x] Wintainium offered as a ticked entry -> `ScanTests.Self_entry`
-- [ ] Wintainium entry points at its script when there is no .exe -> no longer applies (there is always an exe)
+- [x] Wintainium entry points at its script when there is no .exe -> no longer applies (there is always an exe)
 - [x] Wintainium entry prefers Wintainium.exe -> `ScanTests.Self_entry`
 - [x] zip or clone copy updates from the release page -> `ScanTests.Self_entry`
 - [x] installed copy updates itself from the verified Wintainium.exe -> `ScanTests.Self_entry`
 - [x] hidden recognized app left out -> `ScanTests.Hidden_recognized_app`
 - [x] tracked Wintainium not offered again -> `ScanTests.Self_entry`
-- [ ] console report lists recognized apps -> no longer applies (report dropped)
-- [ ] console report still writes the CSV -> no longer applies (report dropped)
+- [x] console report lists recognized apps -> no longer applies (report dropped)
+- [x] console report still writes the CSV -> no longer applies (report dropped)
 
 ### Test-SourceDetection.ps1
 
