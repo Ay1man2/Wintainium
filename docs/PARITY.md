@@ -21,9 +21,9 @@ How to use it:
 
 - [x] **D-01** App list `wintainium-apps.json` next to the app; created as `[]` with a notice when missing. Source: startup block. Proof: `AppListTests.Missing_list_is_created_empty_with_a_notice`
 - [x] **D-02** App list read as an array also when it holds one entry. Source: startup block. Proof: `AppListTests.One_entry_written_as_an_object_reads_as_a_list`
-- [ ] **D-03** App fields understood: `name`, `exe`, `source` (`github`, `gitlab`, `gitea`, `itch`, `dolphin`, `manual`), `repo`, `tag`, `prerelease`, `api`, `url`, `asset`, `downloadUrl`, `update`, `emudeckFn`, `hint`, `launch`, `graceDays`, `installDir`, `installedTag`, `note`. Source: whole script. Proof:
-- [ ] **D-04** Environment variables in `exe`, `launch`, `installDir` are expanded (`%APPDATA%` etc.). Source: `Get-AppRows`, `Start-App`, `Get-AppFolder`. Proof:
-- [ ] **D-05** App list written after Add app, Remove, scan add, and installedTag updates; other fields of every entry kept. Source: `Add-App`, `Remove-AppEntry`, `Add-ScanSelection`, `Save-InstalledTag`. Proof: Add app: `AddAppTests`; scan: `SetupAndScanTests.Add_selected_adds_ticked_rows_with_a_program_and_unique_names`; remove: `SessionTests.Remove_asks_then_drops_the_entry_and_its_cache_but_not_files`
+- [x] **D-03** App fields understood: `name`, `exe`, `source` (`github`, `gitlab`, `gitea`, `itch`, `dolphin`, `manual`), `repo`, `tag`, `prerelease`, `api`, `url`, `asset`, `downloadUrl`, `update`, `emudeckFn`, `hint`, `launch`, `graceDays`, `installDir`, `installedTag`, `note`. Source: whole script. Proof: `AppListTests.Every_field_is_read`, `Field_names_match_case_insensitively_like_PowerShell`
+- [x] **D-04** Environment variables in `exe`, `launch`, `installDir` are expanded (`%APPDATA%` etc.). Source: `Get-AppRows`, `Start-App`, `Get-AppFolder`. Proof: `AppListTests.Environment_variables_are_expanded`
+- [x] **D-05** App list written after Add app, Remove, scan add, and installedTag updates; other fields of every entry kept. Source: `Add-App`, `Remove-AppEntry`, `Add-ScanSelection`, `Save-InstalledTag`. Proof: Add app: `AddAppTests`; scan: `SetupAndScanTests.Add_selected_adds_ticked_rows_with_a_program_and_unique_names`; remove: `SessionTests.Remove_asks_then_drops_the_entry_and_its_cache_but_not_files`; installedTag: `InstallTests.Mod_update`; other fields kept: `AppListTests.Unknown_fields_and_field_order_survive_a_save`
 - [x] **D-06** Settings `wintainium-settings.json`: `installRoot`, `downloadDir`, `setupDone`, `goldSelf`, `scanIgnore`; unreadable file treated as empty. Source: settings block, `Save-Settings`. Proof: `SettingsTests` (all)
 - [x] **D-07** Default folders: installs `%USERPROFILE%\Wintainium\Apps`, downloads `%USERPROFILE%\Downloads\Wintainium`; settings override defaults. Source: `param`, settings block. Proof: `SessionTests.Folders_default_and_follow_settings`
 - [x] **D-08** Release cache `wintainium-cache.json`, keyed by app name: `Tag`, `Date`, `Page`, `Assets` (name + url), `Notes` (cut at 20,000 chars), `Fetched`; unreadable file treated as empty. Source: `Get-LatestCached`, `Save-Cache`. Proof: `ReleaseCacheTests` (all)
@@ -300,12 +300,12 @@ longer applies says why instead of naming a test.
 
 ### Test-Dialogs.ps1
 
-- [ ] Show-Prompt found in the script -> no longer applies (C# dialogs are typed code)
-- [ ] Yes/No box closed with X answers No ->
-- [ ] yes-default question closed with X answers No ->
-- [ ] Stop question closed with X answers No (skip) ->
-- [ ] Yes/No box shows Yes and No buttons ->
-- [ ] text box closed with X answers nothing ->
+- [x] Show-Prompt found in the script -> no longer applies (C# dialogs are typed code)
+- [ ] Yes/No box closed with X answers No -> PC check (WPF `PromptDialog`, X-14)
+- [ ] yes-default question closed with X answers No -> PC check (WPF `PromptDialog`, X-14)
+- [ ] Stop question closed with X answers No (skip) -> PC check (WPF `PromptDialog`, X-14)
+- [ ] Yes/No box shows Yes and No buttons -> PC check (WPF `PromptDialog`, X-14)
+- [ ] text box closed with X answers nothing -> PC check (WPF `PromptDialog`, X-14)
 
 ### Test-Downloads.ps1
 
@@ -333,13 +333,13 @@ longer applies says why instead of naming a test.
 - [x] http checksum file not fetched -> `DownloadTests.Http_checksum_not_fetched`
 - [x] file:// download refused outside tests -> `DownloadTests.Non_https_download_refused`
 - [x] unzip flattens the single top folder -> `InstallTests.Unzip_flattens_single_top_folder`
-- [ ] Add-App: Forgejo URL -> gitea api ->
-- [ ] Add-App: installed into InstallRoot\name ->
-- [ ] Add-App: AppImage filtered out (single choice, no prompt) ->
-- [ ] Add-App: checksum verified during install ->
-- [ ] Add-App: version wildcarded in asset pattern ->
-- [ ] Add-App: update method zip ->
-- [ ] Add-App parses <url> (each case) ->
+- [x] Add-App: Forgejo URL -> gitea api -> `AddAppTests.Links_are_recognised` (self-hosted Forgejo case)
+- [x] Add-App: installed into InstallRoot\name -> `AddAppTests.Install_now_unpacks_into_the_default_folder_and_saves_the_pattern`
+- [x] Add-App: AppImage filtered out (single choice, no prompt) -> `AddAppTests.Install_now_unpacks_into_the_default_folder_and_saves_the_pattern`
+- [x] Add-App: checksum verified during install -> `AddAppTests.Install_now_checks_the_published_checksum`
+- [x] Add-App: version wildcarded in asset pattern -> `AddAppTests.Asset_pattern_wildcards_the_version`
+- [x] Add-App: update method zip -> `AddAppTests.Install_now_unpacks_into_the_default_folder_and_saves_the_pattern`
+- [x] Add-App parses <url> (each case) -> `AddAppTests.Links_are_recognised`, `AddAppTests.Other_text_is_not_a_link`
 - [x] quarantine: names the detection -> `DownloadTests.Quarantine_help`
 - [x] quarantine: warns against Allow on device -> `DownloadTests.Quarantine_help`
 - [x] quarantine: shows published SHA-256 -> `DownloadTests.Quarantine_help`
@@ -347,7 +347,7 @@ longer applies says why instead of naming a test.
 - [x] quarantine: Microsoft form opened -> `DownloadTests.Quarantine_help`
 - [x] quarantine: nothing returned to install -> `DownloadTests.Quarantine_help`
 - [x] remove: only that app removed -> `AppListTests.Remove_takes_only_that_app (list part; the dialog is covered in PR 9)`
-- [ ] remove: answering No keeps it ->
+- [x] remove: answering No keeps it -> `SessionTests.Remove_asks_then_drops_the_entry_and_its_cache_but_not_files`
 - [x] late quarantine: no crash -> `DownloadTests.Late_quarantine_reported`
 - [x] late quarantine: reported as removed -> `DownloadTests.Late_quarantine_reported`
 - [x] page link: https opened -> `DownloadTests.Page_link_opened_parsed`
@@ -366,34 +366,34 @@ longer applies says why instead of naming a test.
 - [x] itch: no version -> file name -> `ItchPageTests.No_version_uses_file_name`
 - [x] itch: empty page throws -> `ItchPageTests.Empty_page_throws`
 - [x] itch: empty page throws (shown as lookup failed) -> `ItchPageTests.Empty_page_throws`
-- [ ] add-app: itch URL -> itch source ->
+- [x] add-app: itch URL -> itch source -> `AddAppTests.Links_are_recognised`, `AddAppTests.Itch_tracks_an_installed_copy`
 
 ### Test-Launch.ps1
 
-- [ ] starts with -File from another folder -> no longer applies (PowerShell start-up quirk); replaced by: exe started from another folder finds its data files
+- [ ] starts with -File from another folder -> no longer applies (PowerShell start-up quirk); replaced by: exe started from another folder finds its data files (PC check, L-01)
 - [x] app list created next to the script -> `AppListTests.Missing_list_is_created_empty_with_a_notice`
-- [ ] empty list shows 0 updates ->
+- [x] empty list shows 0 updates -> `SessionTests.Empty_list_shows_0_updates`
 
 ### Test-Launcher.ps1
 
-- [ ] installs from a lone download ->
-- [ ] installs the scripts and the icon -> becomes: installs the exe
-- [ ] records the installed version ->
-- [ ] newer download updates the installed copy ->
-- [ ] update keeps your app list and settings ->
-- [ ] installed exe is the new one ->
-- [ ] older download does not downgrade ->
-- [ ] git clone: runs its own scripts, left untouched -> no longer applies (no scripts); replaced by: portable/clone folder runs in place
-- [ ] untouched portable zip: runs in place ->
-- [ ] planted script ignored, own copy installed -> no longer applies (no scripts are run)
-- [ ] planted script with a planted marker ignored -> no longer applies (no scripts are run)
-- [ ] .git file pointing at another repo ignored -> no longer applies (no scripts are run)
-- [ ] planted .git file ignored, own copy installed -> no longer applies (no scripts are run)
-- [ ] .git file pointing at a network share ignored -> no longer applies (no scripts are run)
-- [ ] .git folder without HEAD ignored -> no longer applies (no scripts are run)
-- [ ] genuine script beside a changed helper not trusted -> no longer applies (no scripts are run)
-- [ ] installed copy refreshes stale scripts -> becomes: v0.3.0 install upgraded, old scripts removed (I-11)
-- [ ] launcher without scripts reports an error -> no longer applies
+- [x] installs from a lone download -> `SelfInstallerTests.A_download_with_no_install_installs`
+- [x] installs the scripts and the icon -> becomes: installs the exe: `SelfInstallerTests.Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [x] records the installed version -> `SelfInstallerTests.Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [x] newer download updates the installed copy -> `SelfInstallerTests.A_download_updates_only_an_older_install`
+- [x] update keeps your app list and settings -> `SelfInstallerTests.Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [x] installed exe is the new one -> `SelfInstallerTests.Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [x] older download does not downgrade -> `SelfInstallerTests.A_download_updates_only_an_older_install`, `Without_a_marker_the_installed_exe_version_decides`
+- [x] git clone: runs its own scripts, left untouched -> no longer applies (no scripts); replaced by: portable/clone folder runs in place: `SelfInstallerTests.A_portable_copy_runs_in_place_and_installs_nothing`, `A_development_build_always_runs_in_place`
+- [x] untouched portable zip: runs in place -> `SelfInstallerTests.A_portable_copy_runs_in_place_and_installs_nothing`, `An_unpacked_v030_portable_zip_runs_in_place`; planted portable files: `Portable_files_in_a_downloads_folder_are_not_trusted`
+- [x] planted script ignored, own copy installed -> no longer applies (no scripts are run)
+- [x] planted script with a planted marker ignored -> no longer applies (no scripts are run)
+- [x] .git file pointing at another repo ignored -> no longer applies (no scripts are run)
+- [x] planted .git file ignored, own copy installed -> no longer applies (no scripts are run)
+- [x] .git file pointing at a network share ignored -> no longer applies (no scripts are run)
+- [x] .git folder without HEAD ignored -> no longer applies (no scripts are run)
+- [x] genuine script beside a changed helper not trusted -> no longer applies (no scripts are run)
+- [x] installed copy refreshes stale scripts -> becomes: v0.3.0 install upgraded, old scripts removed (I-11): `SelfInstallerTests.Upgrading_a_v030_install_removes_its_scripts`
+- [x] launcher without scripts reports an error -> no longer applies
 
 ### Test-Lookups.ps1
 
@@ -420,32 +420,32 @@ longer applies says why instead of naming a test.
 - [x] empty token reported -> `TokenTests.Empty_token_reported`
 - [x] install folder from settings file -> `SettingsTests.Install_folder_from_settings_file`
 - [x] download folder from settings file -> `SettingsTests.Download_folder_from_settings_file`
-- [ ] command-line option still wins -> becomes: `--data` folder wins over the default
+- [x] command-line option still wins -> becomes: `--data` folder wins over the default: `SessionTests.Options_are_read`; `App.OnStartup` uses `--data` before the exe folder
 
 ### Test-Mods.ps1
 
-- [ ] mod: added instead of "Nothing was unpacked" ->
-- [ ] mod: unpacked with its own folder kept ->
-- [ ] mod: tracked by the .ips file ->
-- [ ] mod: installDir is the install folder ->
-- [ ] mod: installedTag recorded ->
-- [ ] mod: updates by zip, then page ->
-- [ ] mod: asset pattern matches the next version ->
-- [ ] mod: same release is up to date ->
-- [ ] mod: Installed column shows the release tag ->
-- [ ] mod: new release flagged UPDATE ->
+- [x] mod: added instead of "Nothing was unpacked" -> `AddAppTests.A_data_pack_is_tracked_by_release`
+- [x] mod: unpacked with its own folder kept -> `InstallTests.Unzip_flattens_single_top_folder` (only the single top folder goes; the folders inside it stay)
+- [x] mod: tracked by the .ips file -> `AddAppTests.A_data_pack_is_tracked_by_release`
+- [x] mod: installDir is the install folder -> `AddAppTests.A_data_pack_is_tracked_by_release`
+- [x] mod: installedTag recorded -> `AddAppTests.A_data_pack_is_tracked_by_release`
+- [x] mod: updates by zip, then page -> `AddAppTests.An_installed_mod_folder_is_tracked_by_release`
+- [x] mod: asset pattern matches the next version -> `AddAppTests.Asset_pattern_wildcards_the_version`
+- [x] mod: same release is up to date -> `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod same release")
+- [x] mod: Installed column shows the release tag -> `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod same release")
+- [x] mod: new release flagged UPDATE -> `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod new release")
 - [x] mod update: new files in place -> `InstallTests.Mod_update`
 - [x] mod update: nothing unpacked into patches\ -> `InstallTests.Mod_update`
 - [x] mod update: folder backed up first -> `InstallTests.Mod_update`
 - [x] mod update: installedTag saved -> `InstallTests.Mod_update`
-- [ ] mod update: up to date afterwards ->
+- [x] mod update: up to date afterwards -> `InstallTests.Mod_update` (tag saved) with `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod same release")
 - [x] mod update cancelled: tag unchanged -> `InstallTests.Mod_update_cancelled`
-- [ ] mod: Launch opens the folder, does not run the .ips ->
+- [x] mod: Launch opens the folder, does not run the .ips -> `SessionTests.Launch_of_a_mod_opens_its_folder`
 - [x] mod: Get-AppFolder returns installDir -> `InstallTests.App_folder_is_installDir`
-- [ ] existing folder: tracked by release ->
-- [ ] existing folder, unknown release: shows UPDATE ->
-- [ ] not a mod: refused when no top-level program ->
-- [ ] plain app: old .exe still flagged UPDATE ->
+- [x] existing folder: tracked by release -> `AddAppTests.An_installed_mod_folder_is_tracked_by_release`
+- [x] existing folder, unknown release: shows UPDATE -> `AddAppTests.A_mod_folder_not_on_the_latest_release_is_unknown` with `StatusGoldenTests.Every_case_matches_the_PowerShell_answer_except_the_listed_changes` ("Mod unknown release")
+- [x] not a mod: refused when no top-level program -> `AddAppTests.Not_a_pack_and_nothing_at_the_top_is_refused`
+- [x] plain app: old .exe still flagged UPDATE -> `StatusTests.GhOld_flagged_update`
 
 ### Test-Scan.ps1
 
@@ -476,14 +476,14 @@ longer applies says why instead of naming a test.
 - [x] catalog extras kept (launch, hint) -> `ScanTests.Full_scan`
 - [x] with EmuDeck installed, updates go through EmuDeck -> `ScanTests.Full_scan`
 - [x] Wintainium offered as a ticked entry -> `ScanTests.Self_entry`
-- [ ] Wintainium entry points at its script when there is no .exe -> no longer applies (there is always an exe)
+- [x] Wintainium entry points at its script when there is no .exe -> no longer applies (there is always an exe)
 - [x] Wintainium entry prefers Wintainium.exe -> `ScanTests.Self_entry`
 - [x] zip or clone copy updates from the release page -> `ScanTests.Self_entry`
 - [x] installed copy updates itself from the verified Wintainium.exe -> `ScanTests.Self_entry`
 - [x] hidden recognized app left out -> `ScanTests.Hidden_recognized_app`
 - [x] tracked Wintainium not offered again -> `ScanTests.Self_entry`
-- [ ] console report lists recognized apps -> no longer applies (report dropped)
-- [ ] console report still writes the CSV -> no longer applies (report dropped)
+- [x] console report lists recognized apps -> no longer applies (report dropped)
+- [x] console report still writes the CSV -> no longer applies (report dropped)
 
 ### Test-SourceDetection.ps1
 

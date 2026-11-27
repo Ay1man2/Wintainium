@@ -166,6 +166,30 @@ public class AppListTests
         Assert.False(e.Json.ContainsKey("name"));
     }
 
+    [Fact(DisplayName = "every app field is read (D-03)")]
+    public void Every_field_is_read()
+    {
+        var e = new AppEntry(System.Text.Json.Nodes.JsonNode.Parse("""
+            { "name": "N", "exe": "e.exe", "source": "gitlab", "repo": "o/r", "tag": "t", "prerelease": true, "api": "https://api",
+              "url": "https://url", "asset": "^a$", "downloadUrl": "https://dl", "update": ["emudeck", "page"], "emudeckFn": "X_install",
+              "hint": "h", "launch": "l.exe", "graceDays": 5, "installDir": "D", "installedTag": "v1", "note": "n" }
+            """)!.AsObject());
+        Assert.Equal(
+            ("N", "e.exe", "gitlab", "o/r", "t", true, "https://api", "https://url", "^a$", "https://dl"),
+            (e.Name, e.Exe, e.Source, e.Repo, e.Tag, e.Prerelease, e.Api, e.Url, e.Asset, e.DownloadUrl));
+        Assert.Equal(["emudeck", "page"], e.Update);
+        Assert.Equal(("X_install", "h", "l.exe", 5, "D", "v1", "n"), (e.EmudeckFn, e.Hint, e.Launch, e.GraceDays, e.InstallDir, e.InstalledTag, e.Note));
+    }
+
+    [Fact(DisplayName = "environment variables in exe, launch and installDir are expanded (D-04)")]
+    public void Environment_variables_are_expanded()
+    {
+        Environment.SetEnvironmentVariable("WINTAINIUM_TEST_ROOT", "R");
+        var e = new AppEntry { Exe = "%WINTAINIUM_TEST_ROOT%/a.exe", Launch = "%WINTAINIUM_TEST_ROOT%/b.exe", InstallDir = "%WINTAINIUM_TEST_ROOT%/D" };
+        Assert.Equal(("R/a.exe", "R/b.exe", "R/D"), (e.ExpandedExe, e.ExpandedLaunch, e.ExpandedInstallDir));
+        Assert.Equal("%WINTAINIUM_TEST_ROOT%/a.exe", e.Exe); // saved as written
+    }
+
     [Fact]
     public void Field_values_follow_PowerShell_truthiness()
     {

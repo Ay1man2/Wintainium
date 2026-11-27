@@ -20,9 +20,15 @@ public sealed class AddAppTests : IDisposable
     private ReleaseInfo? latest;
     private int lookups;
 
+    private static readonly byte[] SummedZip = Zip(("Sum/sum.exe", "exe"));
+
     public AddAppTests()
     {
+        string sum = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(SummedZip));
         var http = new FakeHttp()
+            .On(Base + "Sum-1.0.zip", _ => Bytes(SummedZip))
+            .On(Base + "Deep-1.0.zip", _ => Bytes(Zip(("Deep/sub/data.bin", "x"))))
+            .On(Base + "Sum-1.0.zip.sha256", _ => Bytes(Encoding.UTF8.GetBytes(sum + "  Sum-1.0.zip\n")))
             .On(Base + "Tool-1.4.2-windows-x64.zip", _ => Bytes(Zip(("Tool/tool.exe", "exe"), ("Tool/readme.txt", "hi"))))
             .On(Base + "Pack-v3.zip", _ => Bytes(Zip(("patches/a.ips", "x"), ("readme.txt", "hi"))))
             .On(Base + "Setup-1.4.2.exe", _ => Bytes(Encoding.UTF8.GetBytes("installer")))
@@ -233,6 +239,16 @@ public sealed class AddAppTests : IDisposable
     }
 
     [Fact]
+    public async Task Install_now_checks_the_published_checksum()
+    {
+        latest = Release("v1.0", "Sum-1.0.zip", "Sum-1.0.zip.sha256");
+        Answers("o/sum", "Sum", "", "");
+        await Flow().RunAsync();
+        Assert.Contains("  SHA-256 matches the published checksum (Sum-1.0.zip.sha256).", rig.Log.AllText, StringComparison.Ordinal);
+        Assert.Equal(rig.Dir.File("Apps/Sum/sum.exe"), Saved().Exe);
+    }
+
+    [Fact]
     public async Task Install_now_copies_a_non_archive()
     {
         latest = Release("v1.4.2", "Setup-1.4.2.exe");
@@ -314,6 +330,16 @@ public sealed class AddAppTests : IDisposable
         await Flow().RunAsync();
         Assert.Equal(rig.Dir.File("Apps/Pack/readme.txt"), Saved().Exe);
         Assert.Equal(["zip", "page"], Saved().Update);
+    }
+
+    [Fact]
+    public async Task Not_a_pack_and_nothing_at_the_top_is_refused()
+    {
+        latest = Release("v1.0", "Deep-1.0.zip");
+        Answers("o/deep", "Deep", "", "");
+        Assert.Null(await Flow().RunAsync()); // "is it a mod or data pack?" answered No
+        Assert.Contains(("  No program file at the top of that folder, so I am not adding it.", LogColor.Red), rig.Log.Lines);
+        Assert.Empty(list.Entries);
     }
 
     [Fact]

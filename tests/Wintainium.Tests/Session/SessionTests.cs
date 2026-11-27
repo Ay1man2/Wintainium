@@ -204,6 +204,10 @@ public sealed class SessionTests : IDisposable
     }
 
     [Fact]
+    public void Empty_list_shows_0_updates() =>
+        Assert.Equal(("0 update(s) available.", LogColor.Cyan), RowViews.Table([])[^1]);
+
+    [Fact]
     public void Table_matches_the_v030_layout()
     {
         var rows = new[]
