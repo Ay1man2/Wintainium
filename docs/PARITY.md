@@ -59,15 +59,15 @@ How to use it:
 
 ## 4. Status engine
 
-- [ ] **E-01** Exe missing = "exe not found". Source: `Get-AppRows`. Proof:
-- [ ] **E-02** Installed = exe ProductVersion, else installedTag, else exe date (yyyy-MM-dd). Source: `Get-AppRows`. Proof:
-- [ ] **E-03** Mods and data packs (`installedTag`): same tag = up to date, else UPDATE. Source: `Get-AppRows`. Proof:
-- [ ] **E-04** Version numbers in the same scheme decide (2.9.179 < 2.9.181). Source: `Test-OlderVersion`. Proof:
-- [ ] **E-05** When versions can't be compared, the release date decides, with `graceDays` per app (default 3). Source: `Get-AppRows`. Proof:
-- [ ] **E-06** Wintainium's own entry (repo `Ay1man2/Wintainium`) reports the app's own version, also from a clone. Source: `Get-AppRows`, `Test-SelfEntry`. Proof:
-- [ ] **E-07** Row order: UPDATE, then problems (token rejected, rate limited, site busy, lookup failed), exe not found, check manually, up to date; then by name. Source: `Get-AppRows`. Proof:
-- [ ] **E-08** Row fields: App, Status, Installed, Latest, Released (local yyyy-MM-dd), Update via (first method's label), page, notes. Method labels: EmuDeck, in-app, installer, zip install, download, release page. Default method `page`. Source: `Get-AppRows`, `$viaLabel`. Proof:
-- [ ] **E-09** Lookup notes in the log: token rejected, hourly limit reached (with token hint), token expiring, http address explained, site busy per app, "(cached)" fallback per app with time. Source: `Show-LookupNotes`. Proof:
+- [x] **E-01** Exe missing = "exe not found". Source: `Get-AppRows`. Proof: `StatusTests.Missing_exe_reported`, golden cases "Missing exe", "Manual missing"
+- [x] **E-02** Installed = exe ProductVersion, else installedTag, else exe date (yyyy-MM-dd). Source: `Get-AppRows`. Proof: `StatusTests.Installed_is_the_exe_date`, golden (`StatusGoldenTests`)
+- [x] **E-03** Mods and data packs (`installedTag`): same tag = up to date, else UPDATE. Source: `Get-AppRows`. Proof: golden cases "Mod ..." (`StatusGoldenTests`)
+- [x] **E-04** Version numbers in the same scheme decide (2.9.179 < 2.9.181). Source: `Test-OlderVersion`. Proof: `VersionCompareTests.Older_by_number`, golden
+- [x] **E-05** When versions can't be compared, the release date decides, with `graceDays` per app (default 3). Source: `Get-AppRows`. Proof: golden cases "Rolling tag ...", "Own grace days", "Grace days zero means default"; `StatusTests.Rolling_tag_uses_asset_date`
+- [x] **E-06** Wintainium's own entry (repo `Ay1man2/Wintainium`) reports the app's own version, also from a clone. Source: `Get-AppRows`, `Test-SelfEntry`. Proof: `StatusTests.Self_reports_own_version`, golden cases "Wintainium"
+- [x] **E-07** Row order: UPDATE, then problems (token rejected, rate limited, site busy, lookup failed), exe not found, check manually, up to date; then by name. Source: `Get-AppRows`. Proof: `StatusTests.Rows_in_order`, `StatusGoldenTests.Rows_come_in_the_PowerShell_order_apart_from_the_moved_statuses`
+- [x] **E-08** Row fields: App, Status, Installed, Latest, Released (local yyyy-MM-dd), Update via (first method's label), page, notes. Method labels: EmuDeck, in-app, installer, zip install, download, release page. Default method `page`. Source: `Get-AppRows`, `$viaLabel`. Proof: `StatusTests.Via_labels`, `StatusTests.Released_is_local_date`, golden
+- [x] **E-09** Lookup notes in the log: token rejected, hourly limit reached (with token hint), token expiring, http address explained, site busy per app, "(cached)" fallback per app with time. Source: `Show-LookupNotes`. Proof: `LookupNotesTests`
 
 ## 5. Updating an app
 
@@ -271,8 +271,8 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [ ] **X-06** `emudeckFn` must match `^[A-Za-z0-9]+_install$`. (#8) Proof:
 - [ ] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof:
 - [ ] **X-08** Zip updates unpack into the right folder when the exe sits in a subfolder. (correctness 1) Proof:
-- [ ] **X-09** Major-version jumps compared by number, not by date. (correctness 2) Proof:
-- [ ] **X-10** Exact version match instead of substring (12.1.0 no longer "contains" 2.1). (correctness 3) Proof:
+- [x] **X-09** Major-version jumps compared by number, not by date. (correctness 2) Proof: `VersionCompareTests.Older_by_number`, listed in `StatusGoldenTests.Deviations`. Only when both versions use the same kind of numbering (neither or both date-style, majors at most 3 apart); otherwise the date decides as before (`VersionCompareTests.Different_schemes_compare_only_when_alike`, golden "Date-style tags" and "Large major gap" cases).
+- [x] **X-10** Exact version match instead of substring (12.1.0 no longer "contains" 2.1). (correctness 3) Proof: `VersionCompareTests.Same_release_needs_the_whole_number`, listed in `StatusGoldenTests.Deviations`
 - [x] **X-11** Atomic writes for every data file; a broken app list is restored from `.bak` with a clear message instead of stopping startup. (correctness 4) Proof: `AppListTests.Saves_utf8_without_bom_and_keeps_a_backup`, `Broken_list_is_restored_from_the_backup`, `Broken_list_without_backup_is_reported_and_left_alone`
 - [ ] **X-12** Old backups pruned; files removed in a new zip release don't linger. (correctness 5) Proof:
 - [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof:
@@ -401,15 +401,15 @@ longer applies says why instead of naming a test.
 - [x] Codeberg 503 is "site busy" -> `ReleaseLookupTests.Codeberg_503_is_site_busy`
 - [x] GitHub 401 is "token rejected" -> `ReleaseLookupTests.GitHub_401_is_token_rejected`
 - [x] GitHub lookups still work -> `ReleaseLookupTests.GitHub_lookups_still_work`
-- [ ] token message shown once for the GitHub app ->
-- [ ] no rate-limit message for an itch.io failure ->
-- [ ] site-busy note names itch.io ->
-- [ ] fallback note says when the saved answer is from ->
+- [x] token message shown once for the GitHub app -> `LookupNotesTests.Token_message_once`
+- [x] no rate-limit message for an itch.io failure -> `LookupNotesTests.No_rate_limit_message_for_itch`
+- [x] site-busy note names itch.io -> `LookupNotesTests.Site_busy_names_itch`
+- [x] fallback note says when the saved answer is from -> `LookupNotesTests.Fallback_note_says_when`
 - [x] itch.io request looks like a browser and identifies Wintainium -> `ReleaseSourcesTests.Itch_request_looks_like_a_browser`
 - [x] itch.io request never carries the GitHub token -> `ReleaseSourcesTests.Itch_request_never_carries_the_token`
 - [x] http release address is not requested -> `ReleaseSourcesTests.Http_address_is_not_requested`
 - [x] http release address shows "lookup failed" -> `ReleaseLookupTests.Http_address_is_lookup_failed`
-- [ ] http release address explained ->
+- [x] http release address explained -> `LookupNotesTests.Http_address_explained`
 - [x] expiry with offset parsed -> `TokenTests.Expiry_with_offset_parsed`
 - [x] expiry in UTC parsed -> `TokenTests.Expiry_in_utc_parsed`
 - [x] no-scope token accepted and marked safe -> `TokenTests.No_scope_token_accepted`
@@ -503,18 +503,18 @@ longer applies says why instead of naming a test.
 
 ### Test-Status.ps1
 
-- [ ] GhOld flagged UPDATE ->
-- [ ] GhNew up to date ->
-- [ ] Rolling tag uses asset date, UPDATE past 30d grace ->
-- [ ] Pre-release tracked ->
-- [ ] Forgejo/Gitea source resolves ->
-- [ ] GitLab source resolves + UPDATE ->
-- [ ] Dolphin feed resolves ->
-- [ ] Manual shows check manually ->
-- [ ] Missing exe reported ->
-- [ ] 404 shows lookup failed ->
-- [ ] 403 shows rate limited ->
-- [ ] Wintainium reports its own version, up to date ->
-- [ ] Wintainium flags its own newer release ->
+- [x] GhOld flagged UPDATE -> `StatusTests.GhOld_flagged_update`
+- [x] GhNew up to date -> `StatusTests.GhNew_up_to_date`
+- [x] Rolling tag uses asset date, UPDATE past 30d grace -> `StatusTests.Rolling_tag_uses_asset_date`
+- [x] Pre-release tracked -> `StatusTests.Prerelease_tracked`
+- [x] Forgejo/Gitea source resolves -> `StatusTests.Gitea_resolves`
+- [x] GitLab source resolves + UPDATE -> `StatusTests.GitLab_resolves`
+- [x] Dolphin feed resolves -> `StatusTests.Dolphin_resolves`
+- [x] Manual shows check manually -> `StatusTests.Manual_check_manually`
+- [x] Missing exe reported -> `StatusTests.Missing_exe_reported`
+- [x] 404 shows lookup failed -> `StatusTests.NotFound_lookup_failed`
+- [x] 403 shows rate limited -> `StatusTests.Forbidden_rate_limited`
+- [x] Wintainium reports its own version, up to date -> `StatusTests.Self_reports_own_version`
+- [x] Wintainium flags its own newer release -> `StatusTests.Self_flags_newer_release`
 - [x] cache file written -> `ReleaseCacheTests.Cache_round_trips`
 - [x] second run served from cache (only failed ones retried) -> `ReleaseLookupTests.Second_run_served_from_cache`
