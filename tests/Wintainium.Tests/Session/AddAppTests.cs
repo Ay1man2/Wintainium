@@ -356,6 +356,17 @@ public sealed class AddAppTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancel_after_installing_also_removes_parent_folders_it_made()
+    {
+        latest = Release("v1.0", "Two-1.0.zip");
+        Answers("o/two", "Two", "", rig.Dir.File("New/Deeper/Two"));
+        rig.Prompts.Confirms.Enqueue(false); // pre-releases
+        Assert.Null(await Flow().RunAsync()); // "Which file is the main program?" cancelled
+        Assert.False(Directory.Exists(rig.Dir.File("New")));
+        Assert.True(Directory.Exists(rig.Dir.Path));
+    }
+
+    [Fact]
     public async Task Cancel_after_installing_removes_what_it_installed_but_not_files_that_were_there()
     {
         rig.Dir.Write("Apps/Two/mine.txt", "keep");
