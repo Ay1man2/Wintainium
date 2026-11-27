@@ -27,7 +27,7 @@ public sealed partial class AddApp
     /// <summary>What "install it now" put on disk, so a cancelled or failed add can take it away again.</summary>
     private Installed? installed;
 
-    private sealed record Installed(string Dir, bool CreatedDir, IReadOnlyList<string> Files, string Download);
+    private sealed record Installed(string Dir, bool CreatedDir, IReadOnlyList<string> Files, string Download, IReadOnlySet<string> FoldersBefore);
 
     public AddApp(InstallContext ctx, Updater updater, AppList list, string installRoot, Func<AppEntry, CancellationToken, Task<ReleaseInfo?>> latestRelease)
     {
@@ -307,7 +307,8 @@ public sealed partial class AddApp
         // only files this add creates are taken away again; files already in the folder stay
         bool createdDir = !Directory.Exists(dir);
         var before = new HashSet<string>(createdDir ? [] : Directory.GetFiles(dir, "*", SearchOption.AllDirectories), StringComparer.OrdinalIgnoreCase);
-        installed = new Installed(dir, createdDir, [], file);
+        var foldersBefore = new HashSet<string>(createdDir ? [] : Directory.GetDirectories(dir, "*", SearchOption.AllDirectories), StringComparer.OrdinalIgnoreCase);
+        installed = new Installed(dir, createdDir, [], file, foldersBefore);
         string method;
         IReadOnlyList<string> written;
         if (Archives.CanUnpack(file, ctx.SevenZip))
@@ -439,7 +440,7 @@ public sealed partial class AddApp
 
     /// <summary>
     /// A cancelled or failed add takes away what it installed: the files it unpacked or copied (never
-    /// files that were already there), folders left empty by that, and the download.
+    /// files that were already there), folders it made that are left empty, and the download.
     /// </summary>
     private void RemoveInstalled()
     {
@@ -472,7 +473,7 @@ public sealed partial class AddApp
             {
                 foreach (string sub in Directory.GetDirectories(done.Dir, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
                 {
-                    if (!Directory.EnumerateFileSystemEntries(sub).Any())
+                    if (!done.FoldersBefore.Contains(sub) && !Directory.EnumerateFileSystemEntries(sub).Any())
                     {
                         Directory.Delete(sub);
                     }

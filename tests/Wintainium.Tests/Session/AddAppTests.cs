@@ -359,6 +359,7 @@ public sealed class AddAppTests : IDisposable
     public async Task Cancel_after_installing_removes_what_it_installed_but_not_files_that_were_there()
     {
         rig.Dir.Write("Apps/Two/mine.txt", "keep");
+        Directory.CreateDirectory(rig.Dir.File("Apps/Two/empty-before"));
         latest = Release("v1.0", "Two-1.0.zip");
         Answers("o/two", "Two", "", "");
         rig.Prompts.Confirms.Enqueue(false); // pre-releases
@@ -368,6 +369,7 @@ public sealed class AddAppTests : IDisposable
         Assert.Equal("keep", File.ReadAllText(rig.Dir.File("Apps/Two/mine.txt")));
         Assert.False(File.Exists(rig.Dir.File("Apps/Two/a.exe")));
         Assert.False(Directory.Exists(rig.Dir.File("Apps/Two/sub")));
+        Assert.True(Directory.Exists(rig.Dir.File("Apps/Two/empty-before")));
         Assert.Empty(Directory.GetFiles(rig.Ctx.DownloadDir));
         Assert.Contains("  Removed the 2 file(s) it had installed.", rig.Log.AllText, StringComparison.Ordinal);
     }
