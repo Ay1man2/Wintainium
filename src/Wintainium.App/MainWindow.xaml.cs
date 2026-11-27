@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private Button[] buttons = [];
     private AppSession? session;
     private bool busy;
+    private bool closeConfirmed;
 
     public MainWindow(string dataFolder)
     {
@@ -42,7 +43,50 @@ public partial class MainWindow : Window
         buttons = [BtnUpdate, BtnAll, BtnNotes, BtnLaunch, BtnPage, BtnFolder, BtnAdd, BtnRefresh, BtnForce, BtnSetup, BtnScan];
         PreviewKeyDown += Window_PreviewKeyDown;
         ContentRendered += Window_ContentRendered;
+        Closing += Window_Closing;
         Closed += (_, _) => session?.Dispose();
+    }
+
+    /// <summary>The log pane, for errors nothing else caught (App.DispatcherUnhandledException).</summary>
+    internal ILog WindowLog => log;
+
+    /// <summary>Closing mid-update would cut a download or unpack short: ask first.</summary>
+    private void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (busy && !closeConfirmed)
+        {
+            closeConfirmed = prompts.Confirm($"Wintainium is still working ({StatusText.Text}). Closing now stops it part-way. Close anyway?");
+            e.Cancel = !closeConfirmed;
+        }
+    }
+
+    /// <summary>
+    /// Runs a quick row action (launch, open a folder or page, gold). Windows can refuse (a UAC
+    /// "No", a missing program): that lands in the log instead of closing the app. Ignored while busy.
+    /// </summary>
+    private void Quick(Action<AppRow> action)
+    {
+        if (busy)
+        {
+            return;
+        }
+
+        AppRow? r = RequireSelected();
+        if (r is null)
+        {
+            return;
+        }
+
+        try
+        {
+            action(r);
+        }
+#pragma warning disable CA1031 // every error ends up in the log, as in v0.3.0
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            log.Write($"Error: {ex.Message}", LogColor.Red);
+        }
     }
 
     private AppRow? Selected => Grid.SelectedItem as AppRow;
@@ -97,6 +141,9 @@ public partial class MainWindow : Window
             b.IsEnabled = !on;
         }
 
+        // the row menu, double-click, F5 and Delete are ignored too while busy
+        RowMenu.IsEnabled = !on;
+
         log.SetStatus(on ? label : "Ready");
     }
 
@@ -137,6 +184,11 @@ public partial class MainWindow : Window
 
     private async Task UpdateSelectedAsync()
     {
+        if (busy)
+        {
+            return;
+        }
+
         AppRow? r = RequireSelected();
         if (r is null || session is null)
         {
@@ -156,6 +208,11 @@ public partial class MainWindow : Window
 
     private async Task RemoveSelectedAsync()
     {
+        if (busy)
+        {
+            return;
+        }
+
         AppRow? r = RequireSelected();
         if (r is null || session is null)
         {
@@ -171,14 +228,7 @@ public partial class MainWindow : Window
         });
     }
 
-    private void ShowNotes()
-    {
-        AppRow? r = RequireSelected();
-        if (r is not null)
-        {
-            new NotesWindow(this, RowViews.Notes(r), shell, log).ShowDialog();
-        }
-    }
+    private void ShowNotes() => Quick(r => new NotesWindow(this, RowViews.Notes(r), shell, log).ShowDialog());
 
     private async void BtnUpdate_Click(object sender, RoutedEventArgs e) => await UpdateSelectedAsync();
 
@@ -194,32 +244,11 @@ public partial class MainWindow : Window
 
     private void BtnNotes_Click(object sender, RoutedEventArgs e) => ShowNotes();
 
-    private void BtnLaunch_Click(object sender, RoutedEventArgs e)
-    {
-        AppRow? r = RequireSelected();
-        if (r is not null)
-        {
-            RowActions.Launch(r, shell, log);
-        }
-    }
+    private void BtnLaunch_Click(object sender, RoutedEventArgs e) => Quick(r => RowActions.Launch(r, shell, log));
 
-    private void BtnPage_Click(object sender, RoutedEventArgs e)
-    {
-        AppRow? r = RequireSelected();
-        if (r is not null)
-        {
-            RowActions.OpenPage(r, shell, log);
-        }
-    }
+    private void BtnPage_Click(object sender, RoutedEventArgs e) => Quick(r => RowActions.OpenPage(r, shell, log));
 
-    private void BtnFolder_Click(object sender, RoutedEventArgs e)
-    {
-        AppRow? r = RequireSelected();
-        if (r is not null)
-        {
-            RowActions.OpenFolder(r, shell, log);
-        }
-    }
+    private void BtnFolder_Click(object sender, RoutedEventArgs e) => Quick(r => RowActions.OpenFolder(r, shell, log));
 
     // Add app, Scan and Setup are ported in PR 9; until then they only say so
     private void BtnAdd_Click(object sender, RoutedEventArgs e) => NotYet();
@@ -250,7 +279,8 @@ public partial class MainWindow : Window
 
     private async void Grid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (Selected is not null)
+        // a double-click on a column header or the scroll bar is not an update
+        if (Selected is not null && RowUnder(e.OriginalSource) is not null)
         {
             await UpdateSelectedAsync();
         }
@@ -259,16 +289,21 @@ public partial class MainWindow : Window
     // K-04: right-click selects the row under the mouse, then the menu opens
     private void Grid_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        DependencyObject? d = e.OriginalSource as DependencyObject;
+        if (RowUnder(e.OriginalSource) is DataGridRow row)
+        {
+            row.IsSelected = true;
+        }
+    }
+
+    private static DataGridRow? RowUnder(object source)
+    {
+        DependencyObject? d = source as DependencyObject;
         while (d is not null and not DataGridRow)
         {
             d = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : null;
         }
 
-        if (d is DataGridRow row)
-        {
-            row.IsSelected = true;
-        }
+        return d as DataGridRow;
     }
 
     private void RowMenu_Opened(object sender, RoutedEventArgs e)
@@ -280,34 +315,20 @@ public partial class MainWindow : Window
         GoldItem.IsChecked = session?.Settings.GoldSelf ?? true;
     }
 
-    private void MenuPage_Click(object sender, RoutedEventArgs e)
-    {
-        AppRow? r = RequireSelected();
-        if (r is not null)
-        {
-            RowActions.OpenPage(r, shell, log, quietWhenMissing: true);
-        }
-    }
+    private void MenuPage_Click(object sender, RoutedEventArgs e) => Quick(r => RowActions.OpenPage(r, shell, log, quietWhenMissing: true));
 
-    private void MenuFolder_Click(object sender, RoutedEventArgs e)
-    {
-        AppRow? r = RequireSelected();
-        if (r is not null)
-        {
-            RowActions.OpenFolder(r, shell, log, quietWhenMissing: true);
-        }
-    }
+    private void MenuFolder_Click(object sender, RoutedEventArgs e) => Quick(r => RowActions.OpenFolder(r, shell, log, quietWhenMissing: true));
 
     private async void MenuRemove_Click(object sender, RoutedEventArgs e) => await RemoveSelectedAsync();
 
-    private void GoldItem_Click(object sender, RoutedEventArgs e)
+    private void GoldItem_Click(object sender, RoutedEventArgs e) => Quick(_ =>
     {
         if (session is not null)
         {
             RowActions.SetGold(session, GoldItem.IsChecked);
             RefreshView();
         }
-    }
+    });
 
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {

@@ -252,6 +252,8 @@ public sealed class SessionTests : IDisposable
     [InlineData(new[] { "--data=" }, "--data needs a folder.")]
     [InlineData(new[] { "token" }, "Unknown option: token")]
     [InlineData(new[] { "--list", "-Config" }, "Unknown option: -Config")]
+    [InlineData(new[] { "--list=yes" }, "--list doesn't take a value.")]
+    [InlineData(new[] { "--Setup=1" }, "--Setup doesn't take a value.")]
     public void Bad_options_are_explained(string[] args, string error) => Assert.Equal(error, CommandLine.Parse(args).Error);
 
     [Fact]

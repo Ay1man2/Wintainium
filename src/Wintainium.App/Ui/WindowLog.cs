@@ -53,10 +53,13 @@ public sealed class WindowLog : ILog
     /// <summary>Sets the status bar ("Ready" or a busy label).</summary>
     public void SetStatus(string text) => Progress(text);
 
-    /// <summary>The last 12 lines written since the previous question, then forgets them (Show-Prompt).</summary>
-    internal string TakePromptContext()
+    /// <summary>
+    /// The last 12 lines written since the previous question (or more, so a long numbered list
+    /// shows whole), then forgets them (Show-Prompt).
+    /// </summary>
+    internal string TakePromptContext(int atLeast = ContextLines)
     {
-        string ctx = string.Join("\n", promptContext.TakeLast(ContextLines));
+        string ctx = string.Join("\n", promptContext.TakeLast(Math.Max(ContextLines, atLeast)));
         promptContext.Clear();
         return ctx;
     }

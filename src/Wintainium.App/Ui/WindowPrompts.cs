@@ -34,7 +34,7 @@ public sealed class WindowPrompts : IUserPrompts
             log.Write(string.Format(CultureInfo.InvariantCulture, "   {0,2}  {1}", i + 1, items[i]));
         }
 
-        string? answer = OnUi(() => PromptDialog.AskText(owner, log.TakePromptContext(), prompt));
+        string? answer = OnUi(() => PromptDialog.AskText(owner, log.TakePromptContext(items.Count + 1), prompt));
         return ChoiceAnswer.Parse(answer, items.Count, prompt);
     }
 

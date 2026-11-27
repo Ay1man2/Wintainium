@@ -39,7 +39,13 @@ public sealed record CommandLine
                 value = a[(eq + 1)..];
             }
 
-            switch (name.ToLowerInvariant())
+            string flag = name.ToLowerInvariant();
+            if (value is not null && flag is "--list" or "--setup" or "--uninstall" or "--install-only")
+            {
+                return new CommandLine { Error = $"{name} doesn't take a value." };
+            }
+
+            switch (flag)
             {
                 case "--list":
                     c = c with { List = true };
