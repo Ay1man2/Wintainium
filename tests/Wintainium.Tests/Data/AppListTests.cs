@@ -79,6 +79,23 @@ public class AppListTests
         Assert.Single(AppList.Load(path, NullLog.Instance).Entries);
     }
 
+    [Fact(DisplayName = "non-ASCII names and paths are saved as pure ASCII (v0.3.0 reads as ANSI)")]
+    public void Non_ascii_round_trips_and_is_written_as_ascii()
+    {
+        using var dir = new TempDir();
+        const string Name = "Pok\u00e9mon Caf\u00e9 \u65e5\u672c";
+        const string Exe = "C:\\Jeux\\\u00c9mulateurs\\caf\u00e9.exe";
+        string path = dir.Write("a.json", $$"""[ { "name": "{{Name}}", "exe": "{{Exe.Replace(@"\", @"\\", StringComparison.Ordinal)}}", "source": "manual" } ]""");
+        AppList list = AppList.Load(path, NullLog.Instance);
+        list.Save();
+        byte[] bytes = File.ReadAllBytes(path);
+        Assert.All(bytes, b => Assert.True(b < 0x80));
+        Assert.Contains("\\u00e9", File.ReadAllText(path), StringComparison.Ordinal);
+        AppEntry e = Assert.Single(AppList.Load(path, NullLog.Instance).Entries);
+        Assert.Equal(Name, e.Name);
+        Assert.Equal(Exe, e.Exe);
+    }
+
     [Fact]
     public void Broken_list_is_restored_from_the_backup()
     {
