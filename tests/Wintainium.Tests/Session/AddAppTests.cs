@@ -316,6 +316,46 @@ public sealed class AddAppTests : IDisposable
         Assert.Equal(["zip", "page"], Saved().Update);
     }
 
+    // ---- Cancel stops Add app (v0.3.0 took Cancel as Enter) ----
+
+    [Fact]
+    public async Task Cancel_on_the_link_stops()
+    {
+        rig.Prompts.Answers.Enqueue(null);
+        Assert.Null(await Flow().RunAsync());
+        Assert.Contains("  Cancelled.", rig.Log.AllText, StringComparison.Ordinal);
+        Assert.Single(rig.Prompts.Asked);
+    }
+
+    [Fact]
+    public async Task Cancel_on_the_install_folder_installs_nothing()
+    {
+        latest = Release("v1.4.2", "Tool-1.4.2-windows-x64.zip");
+        Answers("o/tool", "Tool", "");
+        rig.Prompts.Answers.Enqueue(null);
+        Assert.Null(await Flow().RunAsync());
+        Assert.Empty(rig.Http.Requests);
+        Assert.False(Directory.Exists(rig.Dir.File("Apps/Tool")));
+        Assert.Empty(list.Entries);
+    }
+
+    [Fact]
+    public async Task Cancel_after_installing_removes_what_it_installed_but_not_files_that_were_there()
+    {
+        rig.Dir.Write("Apps/Two/mine.txt", "keep");
+        latest = Release("v1.0", "Two-1.0.zip");
+        Answers("o/two", "Two", "", "");
+        rig.Prompts.Confirms.Enqueue(false); // pre-releases
+        rig.Prompts.Confirms.Enqueue(true); // install into the folder that has files
+        Assert.Null(await Flow().RunAsync()); // "Which file is the main program?" cancelled
+        Assert.Empty(list.Entries);
+        Assert.Equal("keep", File.ReadAllText(rig.Dir.File("Apps/Two/mine.txt")));
+        Assert.False(File.Exists(rig.Dir.File("Apps/Two/a.exe")));
+        Assert.False(Directory.Exists(rig.Dir.File("Apps/Two/sub")));
+        Assert.Empty(Directory.GetFiles(rig.Ctx.DownloadDir));
+        Assert.Contains("  Removed the 2 file(s) it had installed.", rig.Log.AllText, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_program_removed_by_windows_security_is_not_added()
     {
