@@ -14,6 +14,15 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        DispatcherUnhandledException += (_, ex) =>
+        {
+            // an error nothing else caught goes to the log pane instead of closing Wintainium
+            if (MainWindow is MainWindow w)
+            {
+                w.WindowLog.Write($"Error: {ex.Exception.Message}", LogColor.Red);
+                ex.Handled = true;
+            }
+        };
         CommandLine cl = CommandLine.Parse(e.Args);
         if (cl.Error is not null)
         {
@@ -145,7 +154,11 @@ internal static partial class ConsoleOut
 {
     private const int AttachParentProcess = -1;
 
-    public static bool Attach() => Console.IsOutputRedirected || AttachConsole(AttachParentProcess);
+    /// <summary>
+    /// Attaches to the starting console first: in a window app, Console.IsOutputRedirected can't be
+    /// trusted before that. Output redirected to a file or pipe works without a console.
+    /// </summary>
+    public static bool Attach() => AttachConsole(AttachParentProcess) || Console.IsOutputRedirected;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
