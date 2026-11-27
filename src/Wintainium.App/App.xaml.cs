@@ -14,6 +14,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        SelfSetup.WindowsIntegration.SetProcessAppId();
         DispatcherUnhandledException += (_, ex) =>
         {
             // an error nothing else caught goes to the log pane instead of closing Wintainium
@@ -48,11 +49,16 @@ public partial class App : Application
             return;
         }
 
-        if (cl.Uninstall || cl.InstallOnly)
+        if (cl.Uninstall)
         {
-            // ported in PR 10
-            MessageBox.Show("This option isn't in this build yet.", AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Information);
-            Shutdown(1);
+            Shutdown(SelfSetup.SelfStart.Uninstall());
+            return;
+        }
+
+        // I-01 / I-02 / I-07: downloaded on its own, Wintainium installs itself and starts that copy
+        if (cl.Data is null && SelfSetup.SelfStart.Run(e.Args, cl.InstallOnly) is int code)
+        {
+            Shutdown(code);
             return;
         }
 

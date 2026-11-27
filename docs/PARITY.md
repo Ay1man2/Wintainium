@@ -220,22 +220,22 @@ Questions asked today (all become dialogs):
 
 ## 16. Shortcuts and taskbar
 
-- [ ] **H-01** Own taskbar button: AppUserModelID `Ay1man2.Wintainium` on the process, window and shortcuts, so pinned icons and the open window share one button; "Pin to taskbar" pins Wintainium. Source: `WintainiumShell`. Proof:
-- [ ] **H-02** Shortcut and window icon from the exe (never holds a loose `icon.ico` open). Source: `Get-ShellIcon`. Proof:
+- [ ] **H-01** Own taskbar button: AppUserModelID `Ay1man2.Wintainium` on the process, window and shortcuts, so pinned icons and the open window share one button; "Pin to taskbar" pins Wintainium. Source: `WintainiumShell`. Proof: `WindowsIntegration.SetProcessAppId`, shortcuts via `ShellLink` with System.AppUserModel.ID; PC check pending
+- [ ] **H-02** Shortcut and window icon from the exe (never holds a loose `icon.ico` open). Source: `Get-ShellIcon`. Proof: shortcut icon = the exe itself; window icon from the embedded resource; PC check pending
 
 ## 17. Install, update and uninstall (launcher)
 
-- [ ] **I-01** Run on its own: installs per user to `%LOCALAPPDATA%\Programs\Wintainium` (no admin), writes `installed-version.txt`, starts the installed copy and exits. Source: L `Main`, `Install`. Proof:
-- [ ] **I-02** Newer exe updates the installed copy; older never downgrades; user files (list, settings, token, cache) never touched. Source: L `Main`, `Install`. Proof:
-- [ ] **I-03** Installed copy open during an update: "close it, then Retry" with Retry/Cancel. Source: L `Install`. Proof:
-- [ ] **I-04** Installed exe written fresh, so the download mark isn't copied to it. Source: L `Install`. Proof:
-- [ ] **I-05** Settings > Apps entry (HKCU `...\Uninstall\Wintainium`): name, version, publisher, icon, location, uninstall command, about link, no modify/repair, size. Source: L `Register`. Proof:
-- [ ] **I-06** `--uninstall`: only the install folder; refuses when no install; waits for an open window (Retry); asks to remove, then whether to delete the list/settings/token/cache; removes Desktop/Start shortcuts that point into it, the registry entry, then the files after exit. Source: L `Uninstall`. Proof:
-- [ ] **I-07** `--install-only`: installs or updates without starting, no message boxes, result in the exit code. Source: L `Main`. Proof:
-- [ ] **I-08** Portable copy runs in place and installs nothing. Source: L `TrustedScriptFolder`. Proof:
-- [ ] **I-09** Startup errors shown in a message box. Source: L `Run`. Proof:
+- [ ] **I-01** Run on its own: installs per user to `%LOCALAPPDATA%\Programs\Wintainium` (no admin), writes `installed-version.txt`, starts the installed copy and exits. Source: L `Main`, `Install`. Proof: decision and files: `SelfInstallerTests.A_download_with_no_install_installs`, `Install_writes_the_exe_and_marker_and_keeps_user_files`; start of the installed copy: PC check pending
+- [x] **I-02** Newer exe updates the installed copy; older never downgrades; user files (list, settings, token, cache) never touched. Source: L `Main`, `Install`. Proof: `SelfInstallerTests.A_download_updates_only_an_older_install`, `Install_writes_the_exe_and_marker_and_keeps_user_files`
+- [ ] **I-03** Installed copy open during an update: "close it, then Retry" with Retry/Cancel. Source: L `Install`. Proof: `SelfStart.Install` (OK/Cancel box: WPF has no Retry button); PC check pending
+- [ ] **I-04** Installed exe written fresh, so the download mark isn't copied to it. Source: L `Install`. Proof: exe written by stream copy to a new file (`SelfInstaller.Install`); mark check: PC check pending
+- [ ] **I-05** Settings > Apps entry (HKCU `...\Uninstall\Wintainium`): name, version, publisher, icon, location, uninstall command, about link, no modify/repair, size. Source: L `Register`. Proof: `WindowsIntegration.Register`; `SelfInstallerTests.Size_and_version_for_settings_apps`; PC check pending
+- [ ] **I-06** `--uninstall`: only the install folder; refuses when no install; waits for an open window (Retry); asks to remove, then whether to delete the list/settings/token/cache; removes Desktop/Start shortcuts that point into it, the registry entry, then the files after exit. Source: L `Uninstall`. Proof: `SelfInstallerTests.Removal_keeps_user_files_unless_asked`; flow: PC check pending
+- [ ] **I-07** `--install-only`: installs or updates without starting, no message boxes, result in the exit code. Source: L `Main`. Proof: `SelfStart.Run` (no boxes when quiet); PC check pending
+- [x] **I-08** Portable copy runs in place and installs nothing. Source: L `TrustedScriptFolder`. Proof: `SelfInstallerTests.A_portable_copy_runs_in_place_and_installs_nothing`
+- [ ] **I-09** Startup errors shown in a message box. Source: L `Run`. Proof: startup errors use message boxes in `SelfStart`; PC check pending
 - [ ] **I-10** Self-update: an installed copy updates by downloading `Wintainium.exe`, checking it against `Wintainium.exe.sha256` and running it. Release asset names stay the same, so v0.3.0 installs pick up v0.4.0. Source: P-02, release. Proof:
-- [ ] **I-11** A v0.3.0 install upgrades in place to v0.4.0: old script files removed, user files kept, same registry entry. Source: new. Proof:
+- [x] **I-11** A v0.3.0 install upgrades in place to v0.4.0: old script files removed, user files kept, same registry entry. Source: new. Proof: `SelfInstallerTests.Upgrading_a_v030_install_removes_its_scripts`, `A_download_updates_only_an_older_install` (0.3.0 row); same registry key and data files in the same folder
 
 ## 18. Command line
 
@@ -269,7 +269,7 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [x] **X-04** `GITHUB_TOKEN` used only if it passes the no-scope check. (#6) Proof: `TokenTests.GITHUB_TOKEN_is_used_only_when_it_has_no_scopes`
 - [ ] **X-05** Usernames/passwords removed from any URL shown or saved. (#7) Proof:
 - [x] **X-06** `emudeckFn` must match `^[A-Za-z0-9]+_install$`. (#8) Proof: `InstallTests.EmuDeck_function_names_are_checked`, `Bad_EmuDeck_function_not_run`
-- [ ] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof:
+- [x] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof: `SelfInstallerTests.Arguments_are_quoted_the_windows_way`
 - [x] **X-08** Zip updates unpack into the right folder when the exe sits in a subfolder. (correctness 1) Proof: `InstallTests.Exe_in_subfolder_updates_the_right_folder`
 - [x] **X-09** Major-version jumps compared by number, not by date. (correctness 2) Proof: `VersionCompareTests.Older_by_number`, listed in `StatusGoldenTests.Deviations`. Only when both versions use the same kind of numbering (neither or both date-style, majors at most 3 apart); otherwise the date decides as before (`VersionCompareTests.Different_schemes_compare_only_when_alike`, golden "Date-style tags" and "Large major gap" cases).
 - [x] **X-10** Exact version match instead of substring (12.1.0 no longer "contains" 2.1). (correctness 3) Proof: `VersionCompareTests.Same_release_needs_the_whole_number`, listed in `StatusGoldenTests.Deviations`

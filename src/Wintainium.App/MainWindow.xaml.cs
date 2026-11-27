@@ -303,7 +303,7 @@ public partial class MainWindow : Window
 
             return ScanWindow.Run(owner, session!, scanExtra);
         },
-        (desktop, start) => Shortcuts.Create(desktop, start, log));
+        (desktop, start) => SelfSetup.WindowsIntegration.CreateShortcuts(desktop, start, log));
 
     private async void BtnRefresh_Click(object sender, RoutedEventArgs e) =>
         await RunBusyAsync("Checking...", () => RefreshGridAsync(force: false));
