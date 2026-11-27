@@ -40,6 +40,38 @@ public class SettingsTests
         }
     }
 
+    [WindowsFact]
+    public void Access_denied_settings_and_cache_count_as_empty()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var dir = new TempDir();
+        string settings = dir.Write("s.json", """{ "setupDone": true }""");
+        string cache = dir.Write("c.json", """{ "X": { "Tag": "v1" } }""");
+        using (new DeniedFile(settings))
+        using (new DeniedFile(cache))
+        {
+            Assert.False(Settings.Load(settings).SetupDone);
+            Assert.Equal(0, ReleaseCache.Load(cache).Count);
+        }
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("0.4")]
+    [InlineData("1e30")]
+    public void Grace_and_cache_minutes_below_one_or_too_big_use_the_default(string value)
+    {
+        using var dir = new TempDir();
+        Settings s = Settings.Load(dir.Write("s.json", $$"""{ "graceDays": {{value}}, "cacheMinutes": {{value}} }"""));
+        Assert.Equal(Settings.DefaultGraceDays, s.GraceDays);
+        Assert.Equal(Settings.DefaultCacheMinutes, s.CacheMinutes);
+    }
+
     [Theory]
     [InlineData("false", false)]
     [InlineData("\"false\"", false)]

@@ -51,7 +51,7 @@ public sealed class ReleaseCache
                 }
             }
         }
-        catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException or FormatException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException or FormatException)
         {
             cache.items.Clear();
         }
@@ -63,7 +63,14 @@ public sealed class ReleaseCache
 
     public void Set(string appName, ReleaseInfo release, DateTime fetchedUtc)
     {
-        string notes = release.Notes.Length > MaxNotes ? release.Notes[..MaxNotes] : release.Notes;
+        string notes = release.Notes;
+        if (notes.Length > MaxNotes)
+        {
+            // don't split a surrogate pair
+            int cut = char.IsHighSurrogate(notes[MaxNotes - 1]) ? MaxNotes - 1 : MaxNotes;
+            notes = notes[..cut];
+        }
+
         items[appName] = new CachedRelease(release with { Notes = notes }, fetchedUtc);
     }
 
