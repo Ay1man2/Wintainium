@@ -19,24 +19,24 @@ How to use it:
 
 ## 1. Data files and settings
 
-- [ ] **D-01** App list `wintainium-apps.json` next to the app; created as `[]` with a notice when missing. Source: startup block. Proof:
-- [ ] **D-02** App list read as an array also when it holds one entry. Source: startup block. Proof:
+- [x] **D-01** App list `wintainium-apps.json` next to the app; created as `[]` with a notice when missing. Source: startup block. Proof: `AppListTests.Missing_list_is_created_empty_with_a_notice`
+- [x] **D-02** App list read as an array also when it holds one entry. Source: startup block. Proof: `AppListTests.One_entry_written_as_an_object_reads_as_a_list`
 - [ ] **D-03** App fields understood: `name`, `exe`, `source` (`github`, `gitlab`, `gitea`, `itch`, `dolphin`, `manual`), `repo`, `tag`, `prerelease`, `api`, `url`, `asset`, `downloadUrl`, `update`, `emudeckFn`, `hint`, `launch`, `graceDays`, `installDir`, `installedTag`, `note`. Source: whole script. Proof:
 - [ ] **D-04** Environment variables in `exe`, `launch`, `installDir` are expanded (`%APPDATA%` etc.). Source: `Get-AppRows`, `Start-App`, `Get-AppFolder`. Proof:
 - [ ] **D-05** App list written after Add app, Remove, scan add, and installedTag updates; other fields of every entry kept. Source: `Add-App`, `Remove-AppEntry`, `Add-ScanSelection`, `Save-InstalledTag`. Proof:
-- [ ] **D-06** Settings `wintainium-settings.json`: `installRoot`, `downloadDir`, `setupDone`, `goldSelf`, `scanIgnore`; unreadable file treated as empty. Source: settings block, `Save-Settings`. Proof:
+- [x] **D-06** Settings `wintainium-settings.json`: `installRoot`, `downloadDir`, `setupDone`, `goldSelf`, `scanIgnore`; unreadable file treated as empty. Source: settings block, `Save-Settings`. Proof: `SettingsTests` (all)
 - [ ] **D-07** Default folders: installs `%USERPROFILE%\Wintainium\Apps`, downloads `%USERPROFILE%\Downloads\Wintainium`; settings override defaults. Source: `param`, settings block. Proof:
-- [ ] **D-08** Release cache `wintainium-cache.json`, keyed by app name: `Tag`, `Date`, `Page`, `Assets` (name + url), `Notes` (cut at 20,000 chars), `Fetched`; unreadable file treated as empty. Source: `Get-LatestCached`, `Save-Cache`. Proof:
-- [ ] **D-09** Legacy files `emu-apps.json`, `emu-cache.json`, `emu-token.xml` copied once to the new names when those don't exist. Source: startup block. Proof:
-- [ ] **D-10** Files written by Windows PowerShell 5.1 (UTF-8 with BOM) and 7 (without) are both read. Source: n/a (compatibility). Proof:
+- [x] **D-08** Release cache `wintainium-cache.json`, keyed by app name: `Tag`, `Date`, `Page`, `Assets` (name + url), `Notes` (cut at 20,000 chars), `Fetched`; unreadable file treated as empty. Source: `Get-LatestCached`, `Save-Cache`. Proof: `ReleaseCacheTests` (all)
+- [x] **D-09** Legacy files `emu-apps.json`, `emu-cache.json`, `emu-token.xml` copied once to the new names when those don't exist. Source: startup block. Proof: `AppListTests.Legacy_files_are_copied_once`
+- [x] **D-10** Files written by Windows PowerShell 5.1 (UTF-8 with BOM) and 7 (without) are both read. Source: n/a (compatibility). Proof: `AppListTests.Reads_utf8_with_and_without_bom`, `ReleaseCacheTests.Reads_what_PowerShell_wrote`
 
 ## 2. GitHub token
 
-- [ ] **T-01** Token stored in `wintainium-token.xml` (DPAPI, current user) with its expiry date; existing v0.3.0 files are read. Source: `Get-StoredToken`, `Save-GitHubToken`. Proof:
+- [x] **T-01** Token stored in `wintainium-token.xml` (DPAPI, current user) with its expiry date; existing v0.3.0 files are read. Source: `Get-StoredToken`, `Save-GitHubToken`. Proof: `TokenTests.Token_file_round_trips_in_the_Clixml_format`, `Reads_a_file_written_by_Export_Clixml`, `Real_DPAPI_round_trip` and `Reads_a_token_saved_by_Windows_PowerShell` (Windows CI)
 - [ ] **T-02** `GITHUB_TOKEN` environment variable used when set (see I-06 for the added check). Source: `Get-StoredToken`. Proof:
-- [ ] **T-03** Unreadable token file: warning that says how to save it again; app continues without a token. Source: `Get-StoredToken`. Proof:
-- [ ] **T-04** Token check against `https://api.github.com/rate_limit`: accepted / rejected, limit, scopes from `X-OAuth-Scopes`, expiry from `github-authentication-token-expiration` (both formats: offset and UTC). Source: `Test-GitHubToken`, `ConvertFrom-GitHubExpiry`. Proof:
-- [ ] **T-05** Safe only when classic with no scopes; fine-grained (`github_pat_`) and scoped tokens get their own messages. Source: `Test-GitHubToken`. Proof:
+- [x] **T-03** Unreadable token file: warning that says how to save it again; app continues without a token. Source: `Get-StoredToken`. Proof: `TokenTests.Unreadable_token_warns_and_continues_without_one` (message now points to Setup, since the `token` command is dropped)
+- [x] **T-04** Token check against `https://api.github.com/rate_limit`: accepted / rejected, limit, scopes from `X-OAuth-Scopes`, expiry from `github-authentication-token-expiration` (both formats: offset and UTC). Source: `Test-GitHubToken`, `ConvertFrom-GitHubExpiry`. Proof: `TokenTests` expiry and check tests
+- [x] **T-05** Safe only when classic with no scopes; fine-grained (`github_pat_`) and scoped tokens get their own messages. Source: `Test-GitHubToken`. Proof: `TokenTests.Scoped_token_flagged`, `Fine_grained_not_safe`
 - [ ] **T-06** Token sent only to api.github.com (never to itch.io, GitLab, Gitea, Dolphin or download hosts). Source: `$ghHeaders` use. Proof:
 - [ ] **T-07** Expiry warning when 7 days or fewer are left. Source: `Show-LookupNotes`. Proof:
 - [ ] **T-08** Token page link opens GitHub's new-token page with the description filled and no scopes. Source: `$script:TokenPageUrl`. Proof:
@@ -266,14 +266,14 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [ ] **X-01** Archive entries must stay inside the target folder (zip-slip refused). (#2) Proof:
 - [ ] **X-02** Unpacked programs and scripts keep the download mark. (#2) Proof:
 - [ ] **X-03** Checksum file present but unusable = download refused, not "not verified". Wording "integrity check". (#4) Proof:
-- [ ] **X-04** `GITHUB_TOKEN` used only if it passes the no-scope check. (#6) Proof:
+- [x] **X-04** `GITHUB_TOKEN` used only if it passes the no-scope check. (#6) Proof: `TokenTests.GITHUB_TOKEN_is_used_only_when_it_has_no_scopes`
 - [ ] **X-05** Usernames/passwords removed from any URL shown or saved. (#7) Proof:
 - [ ] **X-06** `emudeckFn` must match `^[A-Za-z0-9]+_install$`. (#8) Proof:
 - [ ] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof:
 - [ ] **X-08** Zip updates unpack into the right folder when the exe sits in a subfolder. (correctness 1) Proof:
 - [ ] **X-09** Major-version jumps compared by number, not by date. (correctness 2) Proof:
 - [ ] **X-10** Exact version match instead of substring (12.1.0 no longer "contains" 2.1). (correctness 3) Proof:
-- [ ] **X-11** Atomic writes for every data file; a broken app list is restored from `.bak` with a clear message instead of stopping startup. (correctness 4) Proof:
+- [x] **X-11** Atomic writes for every data file; a broken app list is restored from `.bak` with a clear message instead of stopping startup. (correctness 4) Proof: `AppListTests.Saves_utf8_without_bom_and_keeps_a_backup`, `Broken_list_is_restored_from_the_backup`, `Broken_list_without_backup_is_reported_and_left_alone`
 - [ ] **X-12** Old backups pruned; files removed in a new zip release don't linger. (correctness 5) Proof:
 - [ ] **X-13** Every request has a timeout; lookups run in parallel off the UI thread. (correctness 6) Proof:
 - [ ] **X-14** Closing any yes/no dialog with X or Alt+F4 = No (already true in v0.3.0's window; now true everywhere). (correctness 7) Proof:
@@ -345,7 +345,7 @@ longer applies says why instead of naming a test.
 - [ ] quarantine: VirusTotal opened for that hash ->
 - [ ] quarantine: Microsoft form opened ->
 - [ ] quarantine: nothing returned to install ->
-- [ ] remove: only that app removed ->
+- [x] remove: only that app removed -> `AppListTests.Remove_takes_only_that_app (list part; the dialog is covered in PR 9)`
 - [ ] remove: answering No keeps it ->
 - [ ] late quarantine: no crash ->
 - [ ] late quarantine: reported as removed ->
@@ -370,7 +370,7 @@ longer applies says why instead of naming a test.
 ### Test-Launch.ps1
 
 - [ ] starts with -File from another folder -> no longer applies (PowerShell start-up quirk); replaced by: exe started from another folder finds its data files
-- [ ] app list created next to the script ->
+- [x] app list created next to the script -> `AppListTests.Missing_list_is_created_empty_with_a_notice`
 - [ ] empty list shows 0 updates ->
 
 ### Test-Launcher.ps1
@@ -410,15 +410,15 @@ longer applies says why instead of naming a test.
 - [ ] http release address is not requested ->
 - [ ] http release address shows "lookup failed" ->
 - [ ] http release address explained ->
-- [ ] expiry with offset parsed ->
-- [ ] expiry in UTC parsed ->
-- [ ] no-scope token accepted and marked safe ->
-- [ ] token with scopes is flagged, not safe ->
-- [ ] fine-grained token not treated as safe (permissions unknowable) ->
-- [ ] rejected token reported ->
-- [ ] empty token reported ->
-- [ ] install folder from settings file ->
-- [ ] download folder from settings file ->
+- [x] expiry with offset parsed -> `TokenTests.Expiry_with_offset_parsed`
+- [x] expiry in UTC parsed -> `TokenTests.Expiry_in_utc_parsed`
+- [x] no-scope token accepted and marked safe -> `TokenTests.No_scope_token_accepted`
+- [x] token with scopes is flagged, not safe -> `TokenTests.Scoped_token_flagged`
+- [x] fine-grained token not treated as safe (permissions unknowable) -> `TokenTests.Fine_grained_not_safe`
+- [x] rejected token reported -> `TokenTests.Rejected_token_reported`
+- [x] empty token reported -> `TokenTests.Empty_token_reported`
+- [x] install folder from settings file -> `SettingsTests.Install_folder_from_settings_file`
+- [x] download folder from settings file -> `SettingsTests.Download_folder_from_settings_file`
 - [ ] command-line option still wins -> becomes: `--data` folder wins over the default
 
 ### Test-Mods.ps1
@@ -516,5 +516,5 @@ longer applies says why instead of naming a test.
 - [ ] 403 shows rate limited ->
 - [ ] Wintainium reports its own version, up to date ->
 - [ ] Wintainium flags its own newer release ->
-- [ ] cache file written ->
+- [x] cache file written -> `ReleaseCacheTests.Cache_round_trips`
 - [ ] second run served from cache (only failed ones retried) ->
