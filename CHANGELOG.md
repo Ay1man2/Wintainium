@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3.0 - Unreleased
+## v0.3.0 - 2026-11-27
 
 ### Added
 - One-file download: `Wintainium.exe` carries the scripts, so you download that one file and double-click it. It installs itself to `%LOCALAPPDATA%\Programs\Wintainium` for the current user (no admin rights), adds a Settings > Apps entry to uninstall it, and starts. Running a newer `Wintainium.exe` updates the installed copy and keeps your list, settings and token; it never downgrades. An installed copy updates itself through Wintainium, using the new `Wintainium.exe` checked against its published SHA-256. Its source is in `launcher/`, and `build\Build-Release.ps1` builds it with the C# compiler that ships with Windows.
