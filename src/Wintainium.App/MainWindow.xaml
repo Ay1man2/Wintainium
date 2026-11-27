@@ -1,0 +1,12 @@
+<Window x:Class="Wintainium.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Wintainium" Width="1120" Height="740" MinWidth="820" MinHeight="480"
+        WindowStartupLocation="CenterScreen" Background="#1E1E2E" Foreground="#CDD6F4"
+        FontFamily="Segoe UI" FontSize="13" Icon="/Assets/icon.ico">
+  <!-- Placeholder until the main window is ported (port PR 8). -->
+  <StackPanel Margin="20,16,20,6">
+    <TextBlock Text="Wintainium" FontSize="22" FontWeight="SemiBold"/>
+    <TextBlock x:Name="Summary" Foreground="#A6ADC8" Margin="0,2,0,0" Text="C# port in progress."/>
+  </StackPanel>
+</Window>

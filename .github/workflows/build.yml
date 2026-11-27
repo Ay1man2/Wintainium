@@ -1,0 +1,74 @@
+name: build
+
+# Builds and tests the C# port, publishes the single-file exe as a build artifact,
+# and keeps running the PowerShell test suites until the PowerShell app is retired.
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Wintainium.sln
+
+      - name: Build
+        run: dotnet build Wintainium.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Wintainium.sln -c Release --no-build --logger "console;verbosity=normal"
+
+      - name: Publish single-file exe
+        run: >
+          dotnet publish src/Wintainium.App/Wintainium.App.csproj -c Release -r win-x64 --self-contained
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true -o publish
+
+      - name: Report exe size
+        shell: pwsh
+        run: |
+          $exe = Get-Item publish/Wintainium.exe
+          $mb = [math]::Round($exe.Length / 1MB, 1)
+          "Wintainium.exe: $mb MB"
+          "Wintainium.exe (self-contained, single file): **$mb MB**" | Out-File $env:GITHUB_STEP_SUMMARY -Append
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Wintainium-exe
+          path: publish/Wintainium.exe
+          retention-days: 14
+
+  powershell-tests:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Run PowerShell suites (Windows PowerShell 5.1 and PowerShell 7)
+        shell: pwsh
+        run: ./tests/Run-Tests.ps1
