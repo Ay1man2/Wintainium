@@ -22,7 +22,7 @@ public static class JsonFiles
     public static readonly JsonSerializerOptions WriteOptions = new()
     {
         WriteIndented = true,
-        // Keep paths, apostrophes and non-English names readable, as PowerShell writes them.
+        // Keep paths and apostrophes readable; non-ASCII is escaped afterwards (see Serialize).
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
@@ -40,8 +40,37 @@ public static class JsonFiles
 
     public static JsonNode? ReadFile(string path) => Parse(ReadText(path));
 
+    /// <summary>
+    /// Serializes as pure ASCII: anything outside it is written as \uXXXX. v0.3.0 reads these
+    /// files with Get-Content and no -Encoding, which Windows PowerShell 5.1 decodes as ANSI, so
+    /// raw UTF-8 accented names and paths would come back garbled (and be saved garbled).
+    /// </summary>
     public static string Serialize(JsonNode? node) =>
-        node is null ? "null" : node.ToJsonString(WriteOptions);
+        node is null ? "null" : EscapeNonAscii(node.ToJsonString(WriteOptions));
+
+    // Non-ASCII characters can only appear inside JSON strings, so escaping them here is safe.
+    internal static string EscapeNonAscii(string json)
+    {
+        if (!json.Any(c => c > 0x7F))
+        {
+            return json;
+        }
+
+        var sb = new StringBuilder(json.Length + 32);
+        foreach (char c in json)
+        {
+            if (c > 0x7F)
+            {
+                sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"\\u{(int)c:x4}");
+            }
+            else
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString();
+    }
 
     /// <summary>
     /// Writes text so the file is never half-written: a temp file in the same folder, then a

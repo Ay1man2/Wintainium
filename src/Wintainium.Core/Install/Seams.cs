@@ -6,14 +6,20 @@ namespace Wintainium.Core.Install;
 /// <summary>Questions to the user (Read-Host in v0.3.0). The window shows them as dialogs.</summary>
 public interface IUserPrompts
 {
-    /// <summary>A yes/no question where closing the dialog means No.</summary>
-    bool Confirm(string question);
+    /// <summary>
+    /// A yes/no question where closing the dialog means No. With <paramref name="yesIsDefault"/>
+    /// (a "(Y/n)" question in v0.3.0), Enter answers Yes.
+    /// </summary>
+    bool Confirm(string question, bool yesIsDefault = false);
 
     /// <summary>A numbered choice. Returns the chosen index, or null when cancelled.</summary>
     int? Choose(string title, IReadOnlyList<string> items, string prompt);
 
     /// <summary>Yes / No / Stop, for Update all. Closing the dialog means No.</summary>
     YesNoStop AskYesNoStop(string question);
+
+    /// <summary>A typed answer ("" for Enter on an empty box). Null when the question is cancelled or closed.</summary>
+    string? Ask(string question);
 }
 
 public enum YesNoStop
