@@ -271,7 +271,7 @@ CHANGELOG line. Numbers refer to SECURITY-REVIEW.md.
 - [ ] **X-06** `emudeckFn` must match `^[A-Za-z0-9]+_install$`. (#8) Proof:
 - [ ] **X-07** Standard Windows argument quoting (trailing backslash). (#9) Proof:
 - [ ] **X-08** Zip updates unpack into the right folder when the exe sits in a subfolder. (correctness 1) Proof:
-- [x] **X-09** Major-version jumps compared by number, not by date. (correctness 2) Proof: `VersionCompareTests.Older_by_number`, listed in `StatusGoldenTests.Deviations`
+- [x] **X-09** Major-version jumps compared by number, not by date. (correctness 2) Proof: `VersionCompareTests.Older_by_number`, listed in `StatusGoldenTests.Deviations`. Only when both versions use the same kind of numbering (neither or both date-style, majors at most 3 apart); otherwise the date decides as before (`VersionCompareTests.Different_schemes_compare_only_when_alike`, golden "Date-style tags" and "Large major gap" cases).
 - [x] **X-10** Exact version match instead of substring (12.1.0 no longer "contains" 2.1). (correctness 3) Proof: `VersionCompareTests.Same_release_needs_the_whole_number`, listed in `StatusGoldenTests.Deviations`
 - [x] **X-11** Atomic writes for every data file; a broken app list is restored from `.bak` with a clear message instead of stopping startup. (correctness 4) Proof: `AppListTests.Saves_utf8_without_bom_and_keeps_a_backup`, `Broken_list_is_restored_from_the_backup`, `Broken_list_without_backup_is_reported_and_left_alone`
 - [ ] **X-12** Old backups pruned; files removed in a new zip release don't linger. (correctness 5) Proof:

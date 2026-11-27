@@ -73,5 +73,11 @@
   { "app": { "name": "Wintainium", "exe": "{HERE}/Wintainium.ps1", "source": "github", "repo": "Ay1man2/Wintainium", "update": ["page"] },
     "exe": { "version": "", "written": "2026-01-01T12:00:00Z" }, "release": { "tag": "v{SELF}", "date": "2026-11-10T12:00:00Z" } },
   { "app": { "name": "Wintainium (older)", "exe": "{HERE}/Wintainium.exe", "source": "github", "repo": "ay1man2/wintainium", "update": ["installer", "page"] },
-    "exe": { "version": "", "written": "2026-01-01T12:00:00Z" }, "release": { "tag": "v9.0.0", "date": "2026-11-10T12:00:00Z" } }
+    "exe": { "version": "", "written": "2026-01-01T12:00:00Z" }, "release": { "tag": "v9.0.0", "date": "2026-11-10T12:00:00Z" } },
+  { "app": { "name": "Date-style tags, exe updated after release", "exe": "X/ds.exe", "source": "github", "repo": "o/ds" },
+    "exe": { "version": "1.2.3", "written": "2026-11-20T12:00:00Z" }, "release": { "tag": "2024.11.1", "date": "2026-11-10T12:00:00Z" } },
+  { "app": { "name": "Date-style tags, release newer by date", "exe": "X/dsn.exe", "source": "github", "repo": "o/dsn" },
+    "exe": { "version": "1.2.3", "written": "2026-10-01T12:00:00Z" }, "release": { "tag": "2024.11.1", "date": "2026-11-10T12:00:00Z" } },
+  { "app": { "name": "Large major gap, exe updated after release", "exe": "X/lg.exe", "source": "github", "repo": "o/lg" },
+    "exe": { "version": "1.4.0", "written": "2026-11-20T12:00:00Z" }, "release": { "tag": "v9.1.0", "date": "2026-11-10T12:00:00Z" } }
 ]

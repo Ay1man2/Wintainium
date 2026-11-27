@@ -3,6 +3,15 @@
   "version": "0.3.0",
   "rows": [
     {
+      "App": "Date-style tags, release newer by date",
+      "Status": "UPDATE",
+      "Installed": "1.2.3",
+      "Latest": "2024.11.1",
+      "Released": "2026-11-10",
+      "Via": "release page",
+      "Gold": false
+    },
+    {
       "App": "EmuDeck app",
       "Status": "UPDATE",
       "Installed": "1.1",
@@ -201,10 +210,28 @@
       "Gold": false
     },
     {
+      "App": "Date-style tags, exe updated after release",
+      "Status": "up to date",
+      "Installed": "1.2.3",
+      "Latest": "2024.11.1",
+      "Released": "2026-11-10",
+      "Via": "release page",
+      "Gold": false
+    },
+    {
       "App": "Four part installed",
       "Status": "up to date",
       "Installed": "2.9.181.0",
       "Latest": "v2.9.181",
+      "Released": "2026-11-10",
+      "Via": "release page",
+      "Gold": false
+    },
+    {
+      "App": "Large major gap, exe updated after release",
+      "Status": "up to date",
+      "Installed": "1.4.0",
+      "Latest": "v9.1.0",
       "Released": "2026-11-10",
       "Via": "release page",
       "Gold": false

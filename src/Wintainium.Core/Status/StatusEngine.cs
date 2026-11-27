@@ -70,6 +70,11 @@ public static class StatusEngine
                 status = lookup.FailureStatus ?? Statuses.LookupFailed;
             }
         }
+        else
+        {
+            // no answer at all (the lookup never ran for this app): never an empty status, which would sort above UPDATE
+            status = Statuses.LookupFailed;
+        }
 
         if (!exe.Exists)
         {
