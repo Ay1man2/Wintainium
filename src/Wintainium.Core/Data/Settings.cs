@@ -71,7 +71,7 @@ public sealed class Settings
             {
                 JsonValueKind.False => false,
                 JsonValueKind.String => !string.Equals(v.GetValue<string>(), "false", StringComparison.OrdinalIgnoreCase),
-                JsonValueKind.Number => v.GetValue<double>() != 0,
+                JsonValueKind.Number => JsonObjectExtensions.NumberOf(v) != 0,
                 _ => true,
             };
         }
