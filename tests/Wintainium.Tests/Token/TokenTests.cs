@@ -210,20 +210,26 @@ public class TokenTests
         string path = dir.File("wintainium-token.xml");
         // exactly what v0.3.0's Save-GitHubToken does
         string script =
+            "$ErrorActionPreference = 'Stop'; " +
             "$sec = ConvertTo-SecureString 'ghp_fromPS51' -AsPlainText -Force; " +
             "[pscustomobject]@{ Token = $sec; Expires = [datetime]'2027-11-18T10:00:00' } | Export-Clixml -LiteralPath '" + path.Replace("'", "''", StringComparison.Ordinal) + "'";
         var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"))
         {
             UseShellExecute = false,
             CreateNoWindow = true,
+            RedirectStandardError = true,
         };
+        // A PSModulePath inherited from a .NET or PowerShell 7 process makes Windows PowerShell
+        // load the wrong Microsoft.PowerShell.Security module, so ConvertTo-SecureString fails.
+        psi.Environment.Remove("PSModulePath");
         psi.ArgumentList.Add("-NoProfile");
         psi.ArgumentList.Add("-Command");
         psi.ArgumentList.Add(script);
         using (Process p = Process.Start(psi)!)
         {
+            string errors = p.StandardError.ReadToEnd();
             p.WaitForExit(60000);
-            Assert.Equal(0, p.ExitCode);
+            Assert.True(p.ExitCode == 0 && errors.Length == 0, $"powershell.exe failed ({p.ExitCode}): {errors}");
         }
 
         string written = File.ReadAllText(path);
