@@ -14,9 +14,17 @@ public sealed class FakePrompts : IUserPrompts
 
     public List<string> Asked { get; } = [];
 
-    public bool Confirm(string question)
+    /// <summary>The questions asked with Yes as the Enter answer.</summary>
+    public List<string> YesDefaults { get; } = [];
+
+    public bool Confirm(string question, bool yesIsDefault = false)
     {
         Asked.Add(question);
+        if (yesIsDefault)
+        {
+            YesDefaults.Add(question);
+        }
+
         return Confirms.Count > 0 && Confirms.Dequeue();
     }
 

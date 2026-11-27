@@ -114,6 +114,9 @@ public sealed class AppList
         entries.Add(entry);
     }
 
+    /// <summary>Removes this exact entry (not others with the same name).</summary>
+    public bool RemoveEntry(AppEntry entry) => entries.Remove(entry);
+
     /// <summary>Removes every entry with that name (PowerShell's -ne is case-insensitive). Returns how many.</summary>
     public int Remove(string name) =>
         entries.RemoveAll(e => string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));

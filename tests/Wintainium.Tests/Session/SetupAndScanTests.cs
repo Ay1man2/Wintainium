@@ -144,6 +144,18 @@ public sealed class SetupAndScanTests : IDisposable
     }
 
     [Fact]
+    public void A_failed_save_takes_the_new_entries_out_again()
+    {
+        using AppSession s = Open();
+        File.Delete(s.Data.AppsFile);
+        Directory.CreateDirectory(s.Data.AppsFile); // the list file can't be written now
+        var rows = new[] { new ScanPick(Cand("A", "a.exe")) };
+        Assert.ThrowsAny<IOException>(() => ScanPicker.AddSelected(rows, s.List, log));
+        Assert.Empty(s.List.Entries);
+        Assert.DoesNotContain(log.Lines, l => l.Text.Contains("from the scan", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Nothing_ticked_saves_nothing()
     {
         using AppSession s = Open();
@@ -170,6 +182,7 @@ public sealed class SetupAndScanTests : IDisposable
         using AppSession s = Open();
         ScanPicker.Hide(new ScanPick(Cand("D", "", CandidateKind.Download, key: "gh:o/d")), s.Settings);
         ScanPicker.Hide(new ScanPick(Cand("D", "", CandidateKind.Download, key: "gh:o/d")), s.Settings);
+        ScanPicker.Hide(new ScanPick(Cand("D", "", CandidateKind.Download, key: "GH:O/D")), s.Settings); // same key, other case
         ScanPicker.Hide(new ScanPick(Cand("E", "", CandidateKind.Download, key: "gh:o/e")), s.Settings);
         Assert.Equal(["gh:o/d", "gh:o/e"], Settings.Load(s.Data.SettingsFile).ScanIgnore);
         ScanPicker.ShowHidden(s.Settings);

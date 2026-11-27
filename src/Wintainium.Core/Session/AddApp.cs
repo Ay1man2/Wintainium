@@ -185,7 +185,7 @@ public sealed partial class AddApp
 
         def.Exe = FirstIps(all) ?? all[0];
         def.InstallDir = folder;
-        bool same = ctx.Prompts.Confirm($"Is the latest release ({latest.Tag}) the one in that folder?");
+        bool same = ctx.Prompts.Confirm($"Is the latest release ({latest.Tag}) the one in that folder?", yesIsDefault: true);
         def.InstalledTag = same ? latest.Tag : "unknown";
         def.Update = ["zip", "page"];
         return true;
@@ -208,6 +208,12 @@ public sealed partial class AddApp
         if (dir.Length == 0)
         {
             dir = fallback;
+        }
+
+        if (File.Exists(dir))
+        {
+            log.Write($"  {dir} is a file, not a folder. Not adding {def.Name}.", LogColor.Red);
+            return false;
         }
 
         if (Directory.Exists(dir) && Directory.EnumerateFileSystemEntries(dir).Any()
@@ -264,7 +270,7 @@ public sealed partial class AddApp
                 return false;
             }
 
-            if (ask.Confirm("There is no .exe in it. Is it a mod or data pack, to track by release?"))
+            if (ask.Confirm("There is no .exe in it. Is it a mod or data pack, to track by release?", yesIsDefault: true))
             {
                 // nothing to read a version from: remember the release instead, and one of its
                 // files so a missing install still shows up
@@ -323,7 +329,8 @@ public sealed partial class AddApp
 
             why = "no release was found.";
         }
-        catch (Exception ex) when (ex is LookupException or HttpRequestException or IOException || (ex is OperationCanceledException && !cancel.IsCancellationRequested))
+        catch (Exception ex) when (ex is LookupException or HttpRequestException or IOException or System.Text.Json.JsonException or InvalidOperationException
+                                   || (ex is OperationCanceledException && !cancel.IsCancellationRequested))
         {
             why = ex.Message;
         }
@@ -332,10 +339,19 @@ public sealed partial class AddApp
         return null;
     }
 
+    /// <summary>Adds and saves; when saving fails the entry is taken out again, so a retry doesn't add it twice.</summary>
     private void Save(AppEntry def)
     {
         list.Add(def);
-        list.Save();
+        try
+        {
+            list.Save();
+        }
+        catch
+        {
+            list.RemoveEntry(def);
+            throw;
+        }
     }
 
     private static string Unquote(string answer) => (answer ?? "").Trim().Trim('"');
