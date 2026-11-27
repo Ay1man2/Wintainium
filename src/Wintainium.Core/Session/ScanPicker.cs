@@ -95,14 +95,15 @@ public static class ScanPicker
 
     /// <summary>
     /// C-07: adds every ticked row that has a program, with unique names ("Name (2)"), saves the
-    /// list once, and logs it. Returns how many were added.
+    /// list once, and logs it. Returns how many were added. When saving fails, the new entries are
+    /// taken out again and the error is thrown, so trying again doesn't add them twice.
     /// </summary>
     public static int AddSelected(IEnumerable<ScanPick> rows, AppList list, ILog log)
     {
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(list);
         ArgumentNullException.ThrowIfNull(log);
-        int added = 0;
+        var added = new List<AppEntry>();
         foreach (ScanPick r in rows)
         {
             if (!r.Checked || r.NeedsLocate)
@@ -118,17 +119,31 @@ public static class ScanPicker
 
             var def = (JsonObject)r.Def.DeepClone();
             def["name"] = list.UniqueName(name);
-            list.Add(new AppEntry(def));
-            added++;
+            var entry = new AppEntry(def);
+            list.Add(entry);
+            added.Add(entry);
         }
 
-        if (added > 0)
+        if (added.Count > 0)
         {
-            list.Save();
-            log.Write($"Added {added} app{(added != 1 ? "s" : "")} from the scan.", LogColor.Green);
+            try
+            {
+                list.Save();
+            }
+            catch
+            {
+                foreach (AppEntry e in added)
+                {
+                    list.RemoveEntry(e);
+                }
+
+                throw;
+            }
+
+            log.Write($"Added {added.Count} app{(added.Count != 1 ? "s" : "")} from the scan.", LogColor.Green);
         }
 
-        return added;
+        return added.Count;
     }
 
     /// <summary>C-04: Don't show again, saved in scanIgnore.</summary>
@@ -137,7 +152,7 @@ public static class ScanPicker
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(settings);
         var keys = settings.ScanIgnore.Where(k => k.Length > 0).ToList();
-        if (row.Candidate.Key.Length > 0 && !keys.Contains(row.Candidate.Key))
+        if (row.Candidate.Key.Length > 0 && !keys.Contains(row.Candidate.Key, StringComparer.OrdinalIgnoreCase))
         {
             keys.Add(row.Candidate.Key);
         }

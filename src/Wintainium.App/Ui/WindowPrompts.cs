@@ -18,7 +18,8 @@ public sealed class WindowPrompts : IUserPrompts
         this.log = log;
     }
 
-    public bool Confirm(string question) => OnUi(() => PromptDialog.Ask(owner, log.TakePromptContext(), question, offerStop: false)) == YesNoStop.Yes;
+    public bool Confirm(string question, bool yesIsDefault = false) =>
+        OnUi(() => PromptDialog.Ask(owner, log.TakePromptContext(), question, offerStop: false, yesIsDefault)) == YesNoStop.Yes;
 
     public YesNoStop AskYesNoStop(string question) => OnUi(() => PromptDialog.Ask(owner, log.TakePromptContext(), question, offerStop: true));
 

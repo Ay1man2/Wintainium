@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -33,16 +34,18 @@ public partial class ScanWindow : Window
         Icon = owner.Icon;
         this.session = session;
         this.extraRoots = extraRoots;
-        timer.Tick += (_, _) =>
-        {
-            SStatus.Text = $"Scanning your PC... {(int)scanClock.Elapsed.TotalSeconds} s (usually under a minute)";
-            SStatus.Foreground = Amber;
-        };
+        timer.Tick += (_, _) => ShowScanning();
         ContentRendered += async (_, _) => await StartScanAsync();
         Closing += (_, _) => scanCancel?.Cancel(); // closing stops the scan (C-01)
     }
 
     public int Added { get; private set; }
+
+    private void ShowScanning()
+    {
+        SStatus.Text = $"Scanning your PC... {(int)scanClock.Elapsed.TotalSeconds} s (usually under a minute)";
+        SStatus.Foreground = Amber;
+    }
 
     /// <summary>Opens the scan window and returns how many apps were added.</summary>
     /// <param name="extraRoots">Folders added with Scan another folder...; kept for the next scan.</param>
@@ -66,11 +69,13 @@ public partial class ScanWindow : Window
         SHidden.IsEnabled = false;
         SAdd.IsEnabled = false;
         SExtra.Text = "";
+        hidden = 0;
+        SHidden.Visibility = Visibility.Collapsed;
         using var cancel = new CancellationTokenSource();
         scanCancel = cancel;
         scanClock = Stopwatch.StartNew();
         timer.Start();
-        timer.RaiseTick();
+        ShowScanning();
         ScanResult? res = null;
         string? why = null;
         try
@@ -284,7 +289,18 @@ public partial class ScanWindow : Window
 
     private void SAdd_Click(object sender, RoutedEventArgs e)
     {
-        Added += ScanPicker.AddSelected(rows.Select(r => r.Pick), session.List, session.Log);
+        try
+        {
+            Added += ScanPicker.AddSelected(rows.Select(r => r.Pick), session.List, session.Log);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // nothing was added; the window stays open so the user can try again
+            SStatus.Text = $"Could not save the app list: {ex.Message}";
+            SStatus.Foreground = Palette.Red;
+            return;
+        }
+
         Close();
     }
 
@@ -305,14 +321,4 @@ public partial class ScanWindow : Window
     }
 
     private void SClose_Click(object sender, RoutedEventArgs e) => Close();
-}
-
-internal static class TimerExtensions
-{
-    /// <summary>Shows the first "Scanning..." line at once instead of after the first interval.</summary>
-    public static void RaiseTick(this DispatcherTimer timer)
-    {
-        timer.Stop();
-        timer.Start();
-    }
 }

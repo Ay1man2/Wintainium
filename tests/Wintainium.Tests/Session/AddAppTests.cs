@@ -181,7 +181,7 @@ public sealed class AddAppTests : IDisposable
         Assert.Equal(rig.Dir.File("Mods/Pack"), saved.InstallDir);
         Assert.Equal("v3", saved.InstalledTag);
         Assert.Equal(["zip", "page"], saved.Update);
-        Assert.Contains("Is the latest release (v3) the one in that folder?", rig.Prompts.Asked);
+        Assert.Contains("Is the latest release (v3) the one in that folder?", rig.Prompts.YesDefaults);
     }
 
     [Fact]
@@ -282,6 +282,28 @@ public sealed class AddAppTests : IDisposable
         Assert.Equal(dir, saved.InstallDir);
         Assert.Equal("v3", saved.InstalledTag);
         Assert.Contains("  Tracking it by release: v3 is installed. Wintainium flags the next one.", rig.Log.AllText, StringComparison.Ordinal);
+        Assert.Contains("There is no .exe in it. Is it a mod or data pack, to track by release?", rig.Prompts.YesDefaults);
+    }
+
+    [Fact]
+    public async Task An_install_folder_that_is_a_file_is_refused_before_downloading()
+    {
+        string file = rig.Dir.Write("Apps/Tool", "a file");
+        latest = Release("v1.4.2", "Tool-1.4.2-windows-x64.zip");
+        Answers("o/tool", "Tool", "", "");
+        Assert.Null(await Flow().RunAsync());
+        Assert.Contains(($"  {file} is a file, not a folder. Not adding Tool.", LogColor.Red), rig.Log.Lines);
+        Assert.Empty(rig.Http.Requests);
+    }
+
+    [Fact]
+    public async Task A_failed_save_leaves_the_list_as_it_was()
+    {
+        Answers("o/tool", "Tool", @"C:\Tools\tool.exe");
+        File.Delete(list.FilePath);
+        Directory.CreateDirectory(list.FilePath); // the list file can't be written now
+        await Assert.ThrowsAnyAsync<IOException>(() => Flow().RunAsync());
+        Assert.Empty(list.Entries);
     }
 
     [Fact]

@@ -17,6 +17,7 @@ public static class Shortcuts
         string? exe = Environment.ProcessPath;
         if (exe is null)
         {
+            log.Write("Could not create shortcuts: Wintainium's own location is unknown.", LogColor.Yellow);
             return;
         }
 
@@ -33,6 +34,12 @@ public static class Shortcuts
 
         foreach (string folder in places)
         {
+            if (folder.Length == 0)
+            {
+                log.Write("Could not create a shortcut: Windows reports no folder for it.", LogColor.Yellow);
+                continue;
+            }
+
             try
             {
                 Write(Path.Combine(folder, "Wintainium.lnk"), exe);

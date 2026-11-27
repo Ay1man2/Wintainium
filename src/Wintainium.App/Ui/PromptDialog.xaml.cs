@@ -13,7 +13,7 @@ public partial class PromptDialog : Window
     private string? text;
     private YesNoStop answer = YesNoStop.No; // closing the box with X or Alt+F4 answers No, never Yes
 
-    private PromptDialog(Window? owner, string context, string question, bool textMode, bool offerStop)
+    private PromptDialog(Window? owner, string context, string question, bool textMode, bool offerStop, bool yesIsDefault = false)
     {
         InitializeComponent();
         if (owner is not null && owner.IsVisible)
@@ -43,6 +43,7 @@ public partial class PromptDialog : Window
         {
             Input.Visibility = Visibility.Collapsed;
             B1.Content = "Yes";
+            B1.IsDefault = yesIsDefault;
             B2.Content = "No";
             B2.IsCancel = true;
             if (offerStop)
@@ -56,10 +57,10 @@ public partial class PromptDialog : Window
         }
     }
 
-    /// <summary>Yes / No (/ Stop). Closing the box is No.</summary>
-    public static YesNoStop Ask(Window? owner, string context, string question, bool offerStop)
+    /// <summary>Yes / No (/ Stop). Closing the box is No; Enter is Yes only when <paramref name="yesIsDefault"/>.</summary>
+    public static YesNoStop Ask(Window? owner, string context, string question, bool offerStop, bool yesIsDefault = false)
     {
-        var d = new PromptDialog(owner, context, question, textMode: false, offerStop);
+        var d = new PromptDialog(owner, context, question, textMode: false, offerStop, yesIsDefault);
         d.ShowDialog();
         return d.answer;
     }
