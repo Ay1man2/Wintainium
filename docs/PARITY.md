@@ -37,25 +37,25 @@ How to use it:
 - [x] **T-03** Unreadable token file: warning that says how to save it again; app continues without a token. Source: `Get-StoredToken`. Proof: `TokenTests.Unreadable_token_warns_and_continues_without_one` (message now points to Setup, since the `token` command is dropped)
 - [x] **T-04** Token check against `https://api.github.com/rate_limit`: accepted / rejected, limit, scopes from `X-OAuth-Scopes`, expiry from `github-authentication-token-expiration` (both formats: offset and UTC). Source: `Test-GitHubToken`, `ConvertFrom-GitHubExpiry`. Proof: `TokenTests` expiry and check tests
 - [x] **T-05** Safe only when classic with no scopes; fine-grained (`github_pat_`) and scoped tokens get their own messages. Source: `Test-GitHubToken`. Proof: `TokenTests.Scoped_token_flagged`, `Fine_grained_not_safe`
-- [ ] **T-06** Token sent only to api.github.com (never to itch.io, GitLab, Gitea, Dolphin or download hosts). Source: `$ghHeaders` use. Proof:
+- [x] **T-06** Token sent only to api.github.com (never to itch.io, GitLab, Gitea, Dolphin or download hosts). Source: `$ghHeaders` use. Proof: `ReleaseSourcesTests.GitHub_token_goes_only_to_api_github_com`, `Itch_request_never_carries_the_token`, `Gitea_Forgejo_source_resolves`, `TokenTests.Token_is_only_sent_to_the_GitHub_API`
 - [ ] **T-07** Expiry warning when 7 days or fewer are left. Source: `Show-LookupNotes`. Proof:
 - [ ] **T-08** Token page link opens GitHub's new-token page with the description filled and no scopes. Source: `$script:TokenPageUrl`. Proof:
 
 ## 3. Release sources and cache
 
-- [ ] **S-01** GitHub latest release (`/releases/latest`), date = published. Source: `Get-LatestRelease`. Proof:
-- [ ] **S-02** GitHub fixed `tag` (rolling builds), date = newest asset update, else published. Source: `Get-LatestRelease`. Proof:
-- [ ] **S-03** GitHub `prerelease`: newest non-draft of the last 10 releases. Source: `Get-LatestRelease`. Proof:
-- [ ] **S-04** Gitea / Forgejo / Codeberg via `api`. Source: `Get-LatestRelease`. Proof:
-- [ ] **S-05** GitLab via `api`: tag, released date, page, asset links, description. Source: `Get-LatestRelease`. Proof:
-- [ ] **S-06** itch.io: game page read with browser-like headers (identifies Wintainium), 20 s timeout; picks the upload matching `asset`, else the Windows one, else the first; version or file name as tag; UTC date; error when no downloads listed. Source: `Read-ItchPage`, `$itchHeaders`. Proof:
-- [ ] **S-07** Dolphin feed: `shortrev` tag, Windows x64 artifacts, changelog HTML turned into text, fixed download page. Source: `Get-LatestRelease`. Proof:
+- [x] **S-01** GitHub latest release (`/releases/latest`), date = published. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.GitHub_latest_release`
+- [x] **S-02** GitHub fixed `tag` (rolling builds), date = newest asset update, else published. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.GitHub_rolling_tag_uses_the_newest_asset_date`
+- [x] **S-03** GitHub `prerelease`: newest non-draft of the last 10 releases. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.GitHub_prerelease_takes_the_newest_non_draft`
+- [x] **S-04** Gitea / Forgejo / Codeberg via `api`. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.Gitea_Forgejo_source_resolves`
+- [x] **S-05** GitLab via `api`: tag, released date, page, asset links, description. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.GitLab_source_resolves`
+- [x] **S-06** itch.io: game page read with browser-like headers (identifies Wintainium), 20 s timeout; picks the upload matching `asset`, else the Windows one, else the first; version or file name as tag; UTC date; error when no downloads listed. Source: `Read-ItchPage`, `$itchHeaders`. Proof: `ItchPageTests` (all), `ReleaseSourcesTests.Itch_request_*`
+- [x] **S-07** Dolphin feed: `shortrev` tag, Windows x64 artifacts, changelog HTML turned into text, fixed download page. Source: `Get-LatestRelease`. Proof: `ReleaseSourcesTests.Dolphin_feed_resolves`
 - [ ] **S-08** `manual` source: no lookup, status "check manually". Source: `Get-AppRows`. Proof:
-- [ ] **S-09** Lookup address must be https, else the lookup fails without a request. Source: `Get-LatestRelease`, `Test-HttpsUrl`. Proof:
-- [ ] **S-10** Cache answers reused for 60 minutes; Re-check all ignores the cache. Source: `Get-LatestCached`. Proof:
-- [ ] **S-11** A failed lookup with a cached answer falls back to it, marks Latest "(cached)" and records why and when. Source: `Get-LatestCached`. Proof:
-- [ ] **S-12** Failure reasons: GitHub 401 / "Bad credentials" = token rejected; GitHub 403/429 / "rate limit" = rate limited; other sites 403/429/502/503/504 or timeouts/connection errors = site busy; anything else = lookup failed. Source: `Get-LookupStatus`. Proof:
-- [ ] **S-13** Site names in messages: GitHub, itch.io, GitLab, dolphin-emu.org, else the host of `api`/`url`. Source: `Get-SourceSite`. Proof:
+- [x] **S-09** Lookup address must be https, else the lookup fails without a request. Source: `Get-LatestRelease`, `Test-HttpsUrl`. Proof: `ReleaseSourcesTests.Http_address_is_not_requested`, `ReleaseLookupTests.Http_address_is_lookup_failed`
+- [x] **S-10** Cache answers reused for 60 minutes; Re-check all ignores the cache. Source: `Get-LatestCached`. Proof: `ReleaseLookupTests.Cache_is_reused_only_inside_the_window`, `Second_run_served_from_cache`
+- [x] **S-11** A failed lookup with a cached answer falls back to it, marks Latest "(cached)" and records why and when. Source: `Get-LatestCached`. Proof: `ReleaseLookupTests.Itch_403_falls_back_to_the_saved_answer`
+- [x] **S-12** Failure reasons: GitHub 401 / "Bad credentials" = token rejected; GitHub 403/429 / "rate limit" = rate limited; other sites 403/429/502/503/504 or timeouts/connection errors = site busy; anything else = lookup failed. Source: `Get-LookupStatus`. Proof: `ReleaseLookupTests` (status cases), `Unreachable_sites_are_busy_but_GitHub_is_lookup_failed`
+- [x] **S-13** Site names in messages: GitHub, itch.io, GitLab, dolphin-emu.org, else the host of `api`/`url`. Source: `Get-SourceSite`. Proof: `ReleaseSourcesTests.Site_names`
 
 ## 4. Status engine
 
@@ -324,9 +324,9 @@ longer applies says why instead of naming a test.
 - [ ] traversal name: file at the target is not touched ->
 - [ ] traversal name: nothing started ->
 - [ ] reserved name: refused with a message, no download ->
-- [ ] https link accepted ->
-- [ ] link refused even in tests: '<url>' (each case) ->
-- [ ] file:// refused outside tests ->
+- [x] https link accepted -> `LinksTests.Https_link_accepted`
+- [x] link refused even in tests: '<url>' (each case) -> `LinksTests.Link_refused`
+- [x] file:// refused outside tests -> `LinksTests.Link_refused (file:///C:/... case)`
 - [ ] http download refused with a message ->
 - [ ] http download: existing file not deleted ->
 - [ ] http checksum file not fetched ->
@@ -357,14 +357,14 @@ longer applies says why instead of naming a test.
 
 ### Test-Itch.ps1
 
-- [ ] itch: version read ->
-- [ ] itch: exact UTC date read ->
-- [ ] itch: page kept as link ->
-- [ ] itch: prefers the Windows upload ->
-- [ ] itch: asset pattern overrides ->
-- [ ] itch: no version -> file name ->
-- [ ] itch: empty page throws ->
-- [ ] itch: empty page throws (shown as lookup failed) ->
+- [x] itch: version read -> `ItchPageTests.Version_read`
+- [x] itch: exact UTC date read -> `ItchPageTests.Exact_utc_date_read`
+- [x] itch: page kept as link -> `ItchPageTests.Page_kept_as_link`
+- [x] itch: prefers the Windows upload -> `ItchPageTests.Prefers_the_windows_upload`
+- [x] itch: asset pattern overrides -> `ItchPageTests.Asset_pattern_overrides`
+- [x] itch: no version -> file name -> `ItchPageTests.No_version_uses_file_name`
+- [x] itch: empty page throws -> `ItchPageTests.Empty_page_throws`
+- [x] itch: empty page throws (shown as lookup failed) -> `ItchPageTests.Empty_page_throws`
 - [ ] add-app: itch URL -> itch source ->
 
 ### Test-Launch.ps1
@@ -396,19 +396,19 @@ longer applies says why instead of naming a test.
 
 ### Test-Lookups.ps1
 
-- [ ] itch.io 403 without a saved answer is "site busy", not a GitHub status ->
-- [ ] itch.io 403 with a saved answer falls back to it ->
-- [ ] Codeberg 503 is "site busy" ->
-- [ ] GitHub 401 is "token rejected" ->
-- [ ] GitHub lookups still work ->
+- [x] itch.io 403 without a saved answer is "site busy", not a GitHub status -> `ReleaseLookupTests.Itch_403_is_site_busy`
+- [x] itch.io 403 with a saved answer falls back to it -> `ReleaseLookupTests.Itch_403_falls_back_to_the_saved_answer`
+- [x] Codeberg 503 is "site busy" -> `ReleaseLookupTests.Codeberg_503_is_site_busy`
+- [x] GitHub 401 is "token rejected" -> `ReleaseLookupTests.GitHub_401_is_token_rejected`
+- [x] GitHub lookups still work -> `ReleaseLookupTests.GitHub_lookups_still_work`
 - [ ] token message shown once for the GitHub app ->
 - [ ] no rate-limit message for an itch.io failure ->
 - [ ] site-busy note names itch.io ->
 - [ ] fallback note says when the saved answer is from ->
-- [ ] itch.io request looks like a browser and identifies Wintainium ->
-- [ ] itch.io request never carries the GitHub token ->
-- [ ] http release address is not requested ->
-- [ ] http release address shows "lookup failed" ->
+- [x] itch.io request looks like a browser and identifies Wintainium -> `ReleaseSourcesTests.Itch_request_looks_like_a_browser`
+- [x] itch.io request never carries the GitHub token -> `ReleaseSourcesTests.Itch_request_never_carries_the_token`
+- [x] http release address is not requested -> `ReleaseSourcesTests.Http_address_is_not_requested`
+- [x] http release address shows "lookup failed" -> `ReleaseLookupTests.Http_address_is_lookup_failed`
 - [ ] http release address explained ->
 - [x] expiry with offset parsed -> `TokenTests.Expiry_with_offset_parsed`
 - [x] expiry in UTC parsed -> `TokenTests.Expiry_in_utc_parsed`
@@ -517,4 +517,4 @@ longer applies says why instead of naming a test.
 - [ ] Wintainium reports its own version, up to date ->
 - [ ] Wintainium flags its own newer release ->
 - [x] cache file written -> `ReleaseCacheTests.Cache_round_trips`
-- [ ] second run served from cache (only failed ones retried) ->
+- [x] second run served from cache (only failed ones retried) -> `ReleaseLookupTests.Second_run_served_from_cache`
