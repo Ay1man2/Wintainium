@@ -207,16 +207,16 @@ Questions asked today (all become dialogs):
 
 ## 15. PC scan engine (Find-Sources)
 
-- [ ] **P-01** Recognized apps from `known-apps.json`: each candidate exe path tried (list allowed, `{EmulationPath}` and env vars expanded); tracked check by exe, repo or name; `emudeck` method dropped (with `emudeckFn`) when EmuDeck's backend is missing; catalog extras kept; portable path kept. Source: FS section 0. Proof:
-- [ ] **P-02** Wintainium itself offered when not tracked: exe or script path; installed copy = `installer` + asset `^Wintainium\.exe$` + hint; other copies = `page` + hint. Source: FS section 0. Proof:
-- [ ] **P-03** EmuDeck's Emulation folder read from its `settings.ps1` and added to the roots. Source: FS. Proof:
-- [ ] **P-04** Downloads (Downloads, Desktop, Documents, Emulation, LocalAppData\Programs, install folder, extra folders; depth 6; archive/program types) with a Zone.Identifier mark: site and repo from ReferrerUrl/HostUrl; skips game/save/cache folders. Source: FS section 1. Proof:
-- [ ] **P-05** Source detection: GitHub release downloads and pages, raw.githubusercontent, release-asset hosts (repo ID looked up through the API), GitLab, Codeberg/Forgejo/Gitea, unknown hosts with `/releases/download/`, itch.io game pages (not file servers or the front page); ssh remotes converted; local paths and non-code sites ignored. Source: FS `Get-RepoFromUrl`. Proof:
-- [ ] **P-06** Untracked programs in app folders (install folder, Downloads, Emulation\tools, EmuDeck\Emulators, extra folders): one per folder (largest exe), loose exes per file, noise filtered (uninstallers, updaters, redistributables, backups); origin from the file or the archive it came from. Source: FS section 3. Proof:
-- [ ] **P-07** Mods, texture packs, cheats and patches counted (container folders, Switch-style title IDs, Dolphin-style layouts, patch files); bundled emulator folders skipped. Source: FS section 4. Proof:
-- [ ] **P-08** Candidates: recognized (ticked), found programs from a code host or itch.io (ticked, not when inside a recognized app's folder, not when tracked), downloads with no program (unticked, need Locate; phone/Linux/macOS files left out); each with a hide key; hidden ones counted. Source: FS `Get-ScanCandidates`. Proof:
-- [ ] **P-09** New entries: itch = `page`; GitHub / GitLab / Gitea = `download`, `page` with the right API. Source: FS `New-AppDef`. Proof:
-- [ ] **P-10** Scan only reads files; the GitHub token is used only for the repo-ID lookup at api.github.com. Source: FS. Proof:
+- [x] **P-01** Recognized apps from `known-apps.json`: each candidate exe path tried (list allowed, `{EmulationPath}` and env vars expanded); tracked check by exe, repo or name; `emudeck` method dropped (with `emudeckFn`) when EmuDeck's backend is missing; catalog extras kept; portable path kept. Source: FS section 0. Proof: `ScanTests.Full_scan`, `Hidden_recognized_app`
+- [x] **P-02** Wintainium itself offered when not tracked: exe or script path; installed copy = `installer` + asset `^Wintainium\.exe$` + hint; other copies = `page` + hint. Source: FS section 0. Proof: `ScanTests.Self_entry` (there is always an exe now, so no script fallback)
+- [x] **P-03** EmuDeck's Emulation folder read from its `settings.ps1` and added to the roots. Source: FS. Proof: `ScanTests.Full_scan` (Steam ROM Manager found through EmuDeck's settings.ps1)
+- [x] **P-04** Downloads (Downloads, Desktop, Documents, Emulation, LocalAppData\Programs, install folder, extra folders; depth 6; archive/program types) with a Zone.Identifier mark: site and repo from ReferrerUrl/HostUrl; skips game/save/cache folders. Source: FS section 1. Proof: `ScanTests.Programs_and_downloads_with_a_download_mark_are_found` (saves folder skipped)
+- [x] **P-05** Source detection: GitHub release downloads and pages, raw.githubusercontent, release-asset hosts (repo ID looked up through the API), GitLab, Codeberg/Forgejo/Gitea, unknown hosts with `/releases/download/`, itch.io game pages (not file servers or the front page); ssh remotes converted; local paths and non-code sites ignored. Source: FS `Get-RepoFromUrl`. Proof: `ScanTests.Source_detection`, `Ssh_remote_converted`, `Itch_pages`, `Repo_ids_are_looked_up_once_at_api_github_com_with_the_token`
+- [x] **P-06** Untracked programs in app folders (install folder, Downloads, Emulation\tools, EmuDeck\Emulators, extra folders): one per folder (largest exe), loose exes per file, noise filtered (uninstallers, updaters, redistributables, backups); origin from the file or the archive it came from. Source: FS section 3. Proof: `ScanTests.Programs_and_downloads_with_a_download_mark_are_found`, `A_program_unpacked_from_a_marked_archive_gets_the_archive_origin`
+- [x] **P-07** Mods, texture packs, cheats and patches counted (container folders, Switch-style title IDs, Dolphin-style layouts, patch files); bundled emulator folders skipped. Source: FS section 4. Proof: `ScanTests.Mods_from_a_code_host_are_counted`
+- [x] **P-08** Candidates: recognized (ticked), found programs from a code host or itch.io (ticked, not when inside a recognized app's folder, not when tracked), downloads with no program (unticked, need Locate; phone/Linux/macOS files left out); each with a hide key; hidden ones counted. Source: FS `Get-ScanCandidates`. Proof: `ScanTests.Checklist_rules`, `Hidden_recognized_app`
+- [x] **P-09** New entries: itch = `page`; GitHub / GitLab / Gitea = `download`, `page` with the right API. Source: FS `New-AppDef`. Proof: `ScanTests.New_entries`
+- [x] **P-10** Scan only reads files; the GitHub token is used only for the repo-ID lookup at api.github.com. Source: FS. Proof: `ScanTests.Scan_only_reads`, `Repo_ids_are_looked_up_once_at_api_github_com_with_the_token`
 
 ## 16. Shortcuts and taskbar
 
@@ -448,58 +448,58 @@ longer applies says why instead of naming a test.
 
 ### Test-Scan.ps1
 
-- [ ] itch.io game page recognized ->
-- [ ] itch.io download page keeps the game page ->
-- [ ] itch.io front page is not a game ->
-- [ ] GitHub entry ->
-- [ ] itch.io entry opens the page ->
-- [ ] GitLab entry uses the API ->
-- [ ] Codeberg entry uses the Forgejo API ->
-- [ ] Android download (.apk) left out ->
-- [ ] Linux-only download left out ->
-- [ ] "Don't show again" item left out and counted ->
-- [ ] candidates carry the key used to hide them ->
-- [ ] recognized app listed once (not again as a found program) ->
-- [ ] program from GitHub listed and ticked ->
-- [ ] program from an itch.io page listed ->
-- [ ] already tracked repo left out ->
-- [ ] program of unknown origin left out ->
-- [ ] download for an installed program not repeated ->
-- [ ] download with no program found needs Locate, unticked ->
-- [ ] recognized apps found (PCSX2, Playnite) ->
-- [ ] EmuDeck folder read from its settings (Steam ROM Manager) ->
-- [ ] tracked app (xemu) left out ->
-- [ ] recognized apps are ticked ->
-- [ ] entry keeps the portable %APPDATA% path ->
-- [ ] without EmuDeck installed, its update method is dropped ->
-- [ ] catalog extras kept (launch, hint) ->
-- [ ] with EmuDeck installed, updates go through EmuDeck ->
-- [ ] Wintainium offered as a ticked entry ->
+- [x] itch.io game page recognized -> `ScanTests.Itch_pages`
+- [x] itch.io download page keeps the game page -> `ScanTests.Itch_pages`
+- [x] itch.io front page is not a game -> `ScanTests.Itch_pages`
+- [x] GitHub entry -> `ScanTests.New_entries`
+- [x] itch.io entry opens the page -> `ScanTests.New_entries`
+- [x] GitLab entry uses the API -> `ScanTests.New_entries`
+- [x] Codeberg entry uses the Forgejo API -> `ScanTests.New_entries`
+- [x] Android download (.apk) left out -> `ScanTests.Checklist_rules`
+- [x] Linux-only download left out -> `ScanTests.Checklist_rules`
+- [x] "Don't show again" item left out and counted -> `ScanTests.Checklist_rules`
+- [x] candidates carry the key used to hide them -> `ScanTests.Checklist_rules`
+- [x] recognized app listed once (not again as a found program) -> `ScanTests.Checklist_rules`
+- [x] program from GitHub listed and ticked -> `ScanTests.Checklist_rules`
+- [x] program from an itch.io page listed -> `ScanTests.Checklist_rules`
+- [x] already tracked repo left out -> `ScanTests.Checklist_rules`
+- [x] program of unknown origin left out -> `ScanTests.Checklist_rules`
+- [x] download for an installed program not repeated -> `ScanTests.Checklist_rules`
+- [x] download with no program found needs Locate, unticked -> `ScanTests.Checklist_rules`
+- [x] recognized apps found (PCSX2, Playnite) -> `ScanTests.Full_scan`
+- [x] EmuDeck folder read from its settings (Steam ROM Manager) -> `ScanTests.Full_scan`
+- [x] tracked app (xemu) left out -> `ScanTests.Full_scan`
+- [x] recognized apps are ticked -> `ScanTests.Full_scan`
+- [x] entry keeps the portable %APPDATA% path -> `ScanTests.Full_scan`
+- [x] without EmuDeck installed, its update method is dropped -> `ScanTests.Full_scan`
+- [x] catalog extras kept (launch, hint) -> `ScanTests.Full_scan`
+- [x] with EmuDeck installed, updates go through EmuDeck -> `ScanTests.Full_scan`
+- [x] Wintainium offered as a ticked entry -> `ScanTests.Self_entry`
 - [ ] Wintainium entry points at its script when there is no .exe -> no longer applies (there is always an exe)
-- [ ] Wintainium entry prefers Wintainium.exe ->
-- [ ] zip or clone copy updates from the release page ->
-- [ ] installed copy updates itself from the verified Wintainium.exe ->
-- [ ] hidden recognized app left out ->
-- [ ] tracked Wintainium not offered again ->
+- [x] Wintainium entry prefers Wintainium.exe -> `ScanTests.Self_entry`
+- [x] zip or clone copy updates from the release page -> `ScanTests.Self_entry`
+- [x] installed copy updates itself from the verified Wintainium.exe -> `ScanTests.Self_entry`
+- [x] hidden recognized app left out -> `ScanTests.Hidden_recognized_app`
+- [x] tracked Wintainium not offered again -> `ScanTests.Self_entry`
 - [ ] console report lists recognized apps -> no longer applies (report dropped)
 - [ ] console report still writes the CSV -> no longer applies (report dropped)
 
 ### Test-SourceDetection.ps1
 
-- [ ] github release download ->
-- [ ] github releases page referrer ->
-- [ ] release-assets host: site only ->
-- [ ] raw.githubusercontent repo ->
-- [ ] gitlab package file ->
-- [ ] forgejo self-hosted ->
-- [ ] codeberg ->
-- [ ] unknown host with /releases/download/ ->
-- [ ] scummvm site is not a code host ->
-- [ ] gamebanana is not a code host ->
-- [ ] local path ignored ->
-- [ ] ssh remote converted ->
-- [ ] release-assets repo id resolved ->
-- [ ] old objects host repo id resolved ->
+- [x] github release download -> `ScanTests.Source_detection`
+- [x] github releases page referrer -> `ScanTests.Source_detection`
+- [x] release-assets host: site only -> `ScanTests.Source_detection`
+- [x] raw.githubusercontent repo -> `ScanTests.Source_detection`
+- [x] gitlab package file -> `ScanTests.Source_detection`
+- [x] forgejo self-hosted -> `ScanTests.Source_detection`
+- [x] codeberg -> `ScanTests.Source_detection`
+- [x] unknown host with /releases/download/ -> `ScanTests.Source_detection`
+- [x] scummvm site is not a code host -> `ScanTests.Source_detection`
+- [x] gamebanana is not a code host -> `ScanTests.Source_detection`
+- [x] local path ignored -> `ScanTests.Source_detection`
+- [x] ssh remote converted -> `ScanTests.Ssh_remote_converted`
+- [x] release-assets repo id resolved -> `ScanTests.Source_detection`
+- [x] old objects host repo id resolved -> `ScanTests.Source_detection`
 
 ### Test-Status.ps1
 

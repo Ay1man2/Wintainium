@@ -13,6 +13,9 @@ public sealed class DataFolder
     public const string CacheFileName = "wintainium-cache.json";
     public const string TokenFileName = "wintainium-token.xml";
 
+    /// <summary>Written next to Wintainium by its installer; marks an installed copy.</summary>
+    public const string InstalledVersionFileName = "installed-version.txt";
+
     public DataFolder(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);

@@ -55,4 +55,7 @@ public sealed class FakeHttp : HttpMessageHandler
 
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{\"message\":\"Not Found\"}") });
     }
+
+    protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken) =>
+        SendAsync(request, cancellationToken).GetAwaiter().GetResult();
 }
