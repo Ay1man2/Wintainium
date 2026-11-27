@@ -287,6 +287,7 @@ Decided with the maintainer; listed so nobody ports them by mistake.
 - **`token` command** (clipboard / `GITHUB_TOKEN` prompt). The wizard's token step does it.
 - **`shortcut` command**. The wizard's shortcut step does it.
 - **Standalone `Find-Sources.ps1` report** (console tables and `sources-inventory.csv` on the Desktop). The Scan window covers it.
+- **Git-clone search in the scan** (`Find-Sources.ps1` without `-SkipRepos`: folders with a `.git` remote). The app always ran the scan with `-SkipRepos`, and only the standalone report showed clones.
 - **PowerShell 7 to Windows PowerShell restart** for the window (STA). Not needed in C#.
 - **The PowerShell files** themselves (removed at cutover; the v0.3.0 tag and git history keep them).
 

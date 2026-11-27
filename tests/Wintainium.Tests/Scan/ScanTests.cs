@@ -302,12 +302,35 @@ public sealed class ScanTests : IDisposable
     [Fact]
     public void Built_in_catalog_has_no_Switch_emulators()
     {
+        // The names themselves must not appear in public files, so the guard keeps only their
+        // SHA-256 hashes (of the lowercased name) and compares every word in the catalog with them.
+        string[] banned =
+        [
+            "cfe1ad9ec0024032ab6debc6a6e5d20b65893273e9731dc00033fdd02bca93b1",
+            "1844f87865a1346f2e6f5c747ba65522e391aaf7289be8c928614de41e7cb3fc",
+            "a8f76afdd29836e8e4085a7b92dee2114ac7944c5db86635988e0911c97fded0",
+            "e24ef8f938288781086e27a9433a4d0472a1dbaac31cfe54be2c3525fa30cb2e",
+            "7380589e3b16183472fae0902d348734d907b3c32620936460e0c2bdaff7c817",
+            "39ce3d104e1e584b4990d3e991d6644151ef592889abdfa83cbb1b8a241630ab",
+            "191f148d3dea1672a7b612f9695ccb40672a3652396efc744ddced39c8ae3b22",
+            "78b49fb2cc2d2ed6c1bb8383b3d267b3bc623a8a0fb4aff4aa5d3db74c3b4967",
+        ];
         IReadOnlyList<JsonObject> cat = Catalog.LoadBuiltIn();
         Assert.True(cat.Count > 10);
         string all = string.Join('\n', cat.Select(c => c.ToJsonString())).ToLowerInvariant();
-        foreach (string banned in new[] { "yuzu", "ryujinx", "ryubing", "eden", "suyu", "sudachi", "citron", "switch" })
+        var words = System.Text.RegularExpressions.Regex.Split(all, "[^a-z0-9]+").Where(w => w.Length > 0).ToHashSet(StringComparer.Ordinal);
+        foreach (string word in words)
         {
-            Assert.DoesNotContain(banned, all, StringComparison.Ordinal);
+            string hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(word)));
+            Assert.DoesNotContain(hash, banned);
         }
+    }
+
+    [Fact]
+    public void Switch_guard_catches_a_banned_word()
+    {
+        // the guard above hashes words this way; this checks it would see one ("switch")
+        string hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("switch")));
+        Assert.Equal("78b49fb2cc2d2ed6c1bb8383b3d267b3bc623a8a0fb4aff4aa5d3db74c3b4967", hash);
     }
 }
