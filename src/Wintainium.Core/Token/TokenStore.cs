@@ -30,6 +30,7 @@ public sealed class TokenStore
     public StoredToken? ReadSaved(ILog log)
     {
         ArgumentNullException.ThrowIfNull(log);
+        Expires = null;
         if (!File.Exists(path))
         {
             return null;
@@ -62,6 +63,7 @@ public sealed class TokenStore
     public async Task<string?> GetLookupTokenAsync(HttpClient http, ILog log, CancellationToken cancel = default)
     {
         ArgumentNullException.ThrowIfNull(log);
+        Expires = null;
         string env = (readEnvironment() ?? "").Trim();
         if (env.Length > 0)
         {

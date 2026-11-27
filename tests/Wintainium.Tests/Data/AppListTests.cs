@@ -94,6 +94,54 @@ public class AppListTests
     }
 
     [Fact]
+    public void A_restore_keeps_the_good_backup()
+    {
+        using var dir = new TempDir();
+        string path = dir.Write("a.json", "[ { \"name\": \"broken\" ");
+        string bak = dir.Write("a.json.bak", TwoApps);
+        AppList.Load(path, NullLog.Instance);
+        Assert.Equal(TwoApps, File.ReadAllText(bak));
+
+        // broken again before the next save: the backup still restores
+        File.WriteAllText(path, "{ nope");
+        Assert.Equal(2, AppList.Load(path, NullLog.Instance).Entries.Count);
+    }
+
+    [Fact]
+    public void A_list_that_cannot_be_created_is_reported()
+    {
+        using var dir = new TempDir();
+        string blocker = dir.Write("notafolder", "x");
+        AppListLoadException ex = Assert.Throws<AppListLoadException>(() => AppList.Load(Path.Combine(blocker, "a.json"), NullLog.Instance));
+        Assert.Contains("could not be read", ex.Message, StringComparison.Ordinal);
+    }
+
+    [WindowsFact]
+    public void An_access_denied_list_is_reported_not_crashed()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var dir = new TempDir();
+        string path = dir.Write("a.json", TwoApps);
+        using (new DeniedFile(path))
+        {
+            AppListLoadException ex = Assert.Throws<AppListLoadException>(() => AppList.Load(path, NullLog.Instance));
+            Assert.Contains("could not be read", ex.Message, StringComparison.Ordinal);
+        }
+
+        dir.Write("a.json.bak", TwoApps);
+        File.WriteAllText(path, "{ nope");
+        string bak = path + ".bak";
+        using (new DeniedFile(bak))
+        {
+            Assert.Throws<AppListLoadException>(() => AppList.Load(path, NullLog.Instance));
+        }
+    }
+
+    [Fact]
     public void Broken_list_without_backup_is_reported_and_left_alone()
     {
         using var dir = new TempDir();
