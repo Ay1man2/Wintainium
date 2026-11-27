@@ -44,7 +44,7 @@ param(
     [int]$CacheMinutes = 60
 )
 
-$script:AppVersion = '0.2.0'
+$script:AppVersion = '0.3.0'
 
 # The script's own folder. Windows PowerShell 5.1 leaves $PSScriptRoot empty while the
 # param() defaults are evaluated when started with -File (as the shortcut does), so resolve it here.
@@ -234,7 +234,39 @@ function Read-ItchPage([string]$html, [string]$page, [string]$assetPattern) {
     return [pscustomobject]@{ Tag = $tag; Date = $pick.Date; Page = $page; Assets = @(); Notes = "Latest upload: $($pick.Name)" }
 }
 
+# Release lookups, downloads and checksums only go over https. (The tests serve files from disk,
+# so they set $script:AllowFileUrls to allow local file:// paths; UNC paths are never allowed.)
+function Test-HttpsUrl([string]$url) {
+    $u = $null
+    if (-not [uri]::TryCreate($url, [UriKind]::Absolute, [ref]$u)) { return $false }
+    if ($u.Scheme -eq 'https') { return $true }
+    return [bool]($script:AllowFileUrls -and $u.Scheme -eq 'file' -and -not $u.IsUnc)
+}
+
+# Opens a web page in the browser. Page links come from release servers, so only absolute https
+# links are opened: a UNC path, file: link or program path would otherwise be run by Windows.
+function Open-WebPage([string]$url) {
+    $u = $null
+    if ([uri]::TryCreate($url, [UriKind]::Absolute, [ref]$u) -and $u.Scheme -eq 'https') {
+        # Open the parsed form, so Windows gets exactly the https link that was checked.
+        Start-Process $u.AbsoluteUri
+        return
+    }
+    Write-Host "Not opening '$url': it isn't an https link." -ForegroundColor Yellow
+}
+
+# The address a non-GitHub app is looked up at (GitHub's is built in), or $null.
+function Get-LookupUrl($app) {
+    switch ([string]$app.source) {
+        { $_ -in 'gitea', 'gitlab', 'dolphin' } { return [string]$app.api }
+        'itch' { return [string]$app.url }
+    }
+    return $null
+}
+
 function Get-LatestRelease($app) {
+    $lookup = Get-LookupUrl $app
+    if ($null -ne $lookup -and -not (Test-HttpsUrl $lookup)) { throw "$lookup is not an https link" }
     if ($app.source -eq 'github') {
         $base = "https://api.github.com/repos/$($app.repo)"
         if ($app.tag) {
@@ -480,6 +512,12 @@ function Show-LookupNotes($rows) {
         $left = [int]([datetime]$script:tokenExpires - (Get-Date)).TotalDays
         if ($left -le 7) { Write-Host "Your GitHub token expires in about $left day(s). $tokenHint" -ForegroundColor Yellow }
     }
+    foreach ($r in @($rows | Where-Object { $_.Status -eq 'lookup failed' })) {
+        $u = Get-LookupUrl $r.Def
+        if ($u -and -not (Test-HttpsUrl $u)) {
+            Write-Host "$($r.App): Wintainium only looks up releases over https, and its address ($u) isn't one. Change it to https:// in wintainium-apps.json." -ForegroundColor Yellow
+        }
+    }
     foreach ($r in @($rows | Where-Object { $_.Status -eq 'site busy' })) {
         Write-Host "$($r.App): $(Get-SourceSite $r.Def) didn't answer. It's usually busy for a few minutes; try Refresh later." -ForegroundColor Yellow
     }
@@ -577,6 +615,10 @@ function Select-Asset($row) {
 # Windows' "downloaded from the internet" mark so SmartScreen still checks it, and notices
 # when Windows Security removes the file the moment it lands.
 function Save-Download([string]$url, [string]$file, [string]$label) {
+    if (-not (Test-HttpsUrl $url)) {
+        Write-Host "  Not downloading $label from $url`: Wintainium only downloads over https." -ForegroundColor Red
+        return 'failed'
+    }
     Write-Host "  Downloading $label..."
     if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
     $wc = New-Object Net.WebClient
@@ -615,6 +657,7 @@ function Get-PublishedHash($row, [string]$name) {
         $sum = $all | Where-Object { $_.name -match '(?i)^(sha256sums|checksums?|sha256|hashes)(\.txt|\.sha256)?$' } | Select-Object -First 1
     }
     if (-not $sum) { return $null }
+    if (-not (Test-HttpsUrl ([string]$sum.browser_download_url))) { return @{ From = $sum.name; Error = "$($sum.name) is not an https link" } }
     try {
         $wc = New-Object Net.WebClient
         $wc.Headers['User-Agent'] = 'Wintainium'
@@ -680,24 +723,43 @@ function Show-QuarantineHelp($row, [string]$name) {
     if ($p -and $p.Hash) {
         Write-Host "  Published SHA-256 ($($p.From)): $($p.Hash)"
         if ((Read-Host '  Look this hash up on VirusTotal (no upload needed)? (y/N)') -match '^y') {
-            Start-Process "https://www.virustotal.com/gui/file/$($p.Hash)"
+            Open-WebPage "https://www.virustotal.com/gui/file/$($p.Hash)"
         }
     }
     if ((Read-Host '  Open Microsoft''s form to report a false positive? (y/N)') -match '^y') {
-        Start-Process 'https://www.microsoft.com/en-us/wdsi/filesubmission'
+        Open-WebPage 'https://www.microsoft.com/en-us/wdsi/filesubmission'
     }
+}
+
+# Where a download named by the release goes: a plain file name inside $dir, or $null when the
+# name can't be used. Release data is untrusted (GitLab link names and Gitea/Forgejo asset names
+# are free text), so only the last part of the name is kept and the result must stay inside $dir.
+function Get-SafeDownloadPath([string]$dir, [string]$name) {
+    $leaf = ([string]$name -split '[\\/]')[-1]
+    if (-not $leaf -or $leaf -eq '.' -or $leaf -eq '..') { return $null }
+    if ($leaf -match '[\x00-\x1f<>:"|?*]' -or $leaf -match '[. ]$') { return $null }
+    # Windows device names, also with an extension or spaces before it (COM\u00B9-\u00B3 and LPT\u00B9-\u00B3 count too).
+    if ($leaf -match '(?i)^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|(COM|LPT)[0-9\u00B9\u00B2\u00B3])\s*(\..*)?$') { return $null }
+    $base = [IO.Path]::GetFullPath($dir).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $full = [IO.Path]::GetFullPath((Join-Path $dir $leaf))
+    if (-not $full.StartsWith($base, [StringComparison]::OrdinalIgnoreCase)) { return $null }
+    return $full
 }
 
 function Get-AssetFile($row) {
     $asset = Select-Asset $row
     if (-not $asset) {
         Write-Host '  No matching download on that release. Opening the release page instead.' -ForegroundColor Yellow
-        if ($row.Page) { Start-Process $row.Page }
+        if ($row.Page) { Open-WebPage $row.Page }
+        return $null
+    }
+    $file = Get-SafeDownloadPath $DownloadDir ([string]$asset.name)
+    if (-not $file) {
+        Write-Host "  Not downloading '$($asset.name)': the release gives it an unsafe file name." -ForegroundColor Red
         return $null
     }
     if (-not (Test-Path -LiteralPath $DownloadDir)) { New-Item -ItemType Directory -Path $DownloadDir | Out-Null }
-    $file = Join-Path $DownloadDir $asset.name
-    $got = Save-Download ([string]$asset.browser_download_url) $file ([string]$asset.name)
+    $got = Save-Download ([string]$asset.browser_download_url) $file ([IO.Path]::GetFileName($file))
     if ($got -eq 'removed') { Show-QuarantineHelp $row ([string]$asset.name); return $null }
     if ($got -ne 'ok') { return $null }
     $check = Test-Checksum $row $asset $file
@@ -806,7 +868,7 @@ function Invoke-Method($row, [string]$method, [switch]$Yes) {
             }
         }
         default {
-            if ($row.Page) { Start-Process $row.Page }
+            if ($row.Page) { Open-WebPage $row.Page }
             else { Write-Host '  No release page is set for this app. Add its repo or url to wintainium-apps.json.' -ForegroundColor Yellow }
         }
     }
@@ -1968,7 +2030,7 @@ STYLES
         Update-WizardTokenStatus
         $script:wz.BrowseInstall.Add_Click({ Select-WizardFolder $script:wz.InstallBox })
         $script:wz.BrowseDownload.Add_Click({ Select-WizardFolder $script:wz.DownloadBox })
-        $script:wz.OpenGitHub.Add_Click({ Start-Process $script:TokenPageUrl })
+        $script:wz.OpenGitHub.Add_Click({ Open-WebPage $script:TokenPageUrl })
         $script:wz.CheckToken.Add_Click({
             $script:wz.TokenResult.Text = 'Checking with GitHub...'
             $script:wz.TokenResult.Foreground = '#A6ADC8'
@@ -2079,7 +2141,8 @@ STYLES
         if ($prompt -match '\((y/N|Y/n)') {
             $d.Prompt.Text = ($prompt -replace '\s*\((y/N|Y/n)[^)]*\)\s*:?\s*$', '').Trim()
             $d.Input.Visibility = 'Collapsed'
-            $d.B1.Content = 'Yes'; $d.B1.Add_Click({ $script:dlgResult = 'y'; $script:dlg.Close() })
+            $script:dlgResult = 'n'   # closing the box with X (or Alt+F4) answers No, never Yes
+            $d.B1.Content = 'Yes';$d.B1.Add_Click({ $script:dlgResult = 'y'; $script:dlg.Close() })
             $d.B2.Content = 'No';  $d.B2.IsCancel = $true; $d.B2.Add_Click({ $script:dlgResult = 'n'; $script:dlg.Close() })
             if ($prompt -match 'q = stop') {
                 $d.B3.Content = 'Stop'; $d.B3.Add_Click({ $script:dlgResult = 'q'; $script:dlg.Close() })
@@ -2160,7 +2223,7 @@ STYLES
         $script:notesWin.FindName('NSub').Text = if ($r.Released) { "Released $($r.Released)  -  you have $($r.Installed)" } else { "You have $($r.Installed)" }
         $text = (Get-NotesText $r) -replace "`r`n", "`n" -replace '\*\*', '' -replace '(?m)^#+\s*', ''
         $script:notesWin.FindName('NBody').Text = $text
-        $script:notesWin.FindName('NOpen').Add_Click({ if ($script:notesRow.Page) { Start-Process $script:notesRow.Page } })
+        $script:notesWin.FindName('NOpen').Add_Click({ if ($script:notesRow.Page) { Open-WebPage $script:notesRow.Page } })
         $script:notesWin.FindName('NClose').Add_Click({ $script:notesWin.Close() })
         [void]$script:notesWin.ShowDialog()
     }
@@ -2188,7 +2251,7 @@ STYLES
     $script:ui.BtnAll.Add_Click({ Invoke-Busy 'Updating all outdated apps...' { Update-All $script:rows; Update-Grid } })
     $script:ui.BtnPage.Add_Click({
         $r = Get-Selected
-        if ($r) { if ($r.Page) { Start-Process $r.Page } else { Write-Host "No release page is set for $($r.App)." -ForegroundColor Yellow } }
+        if ($r) { if ($r.Page) { Open-WebPage $r.Page } else { Write-Host "No release page is set for $($r.App)." -ForegroundColor Yellow } }
     })
     $script:ui.BtnFolder.Add_Click({
         $r = Get-Selected
@@ -2220,7 +2283,7 @@ STYLES
             @{ h = "What's new"; a = { $r = Get-Selected; if ($r) { Show-Notes $r } } },
             @{ h = 'Launch'; a = { $r = Get-Selected; if ($r) { Start-App $r } } },
             @{ h = '-' },
-            @{ h = 'Open release page'; a = { $r = Get-Selected; if ($r -and $r.Page) { Start-Process $r.Page } } },
+            @{ h = 'Open release page'; a = { $r = Get-Selected; if ($r -and $r.Page) { Open-WebPage $r.Page } } },
             @{ h = 'Open folder'; a = { $r = Get-Selected; if ($r) { $dir = Get-AppFolder $r; if (Test-Path -LiteralPath $dir) { Start-Process explorer.exe "`"$dir`"" } } } },
             @{ h = '-' },
             @{ h = 'Remove from list...'; a = { $r = Get-Selected; if ($r) { Invoke-Busy 'Removing...' { if (Remove-AppEntry $r) { Update-Grid } } } } })) {
@@ -2297,7 +2360,7 @@ while ($true) {
     }
     elseif ($in -match '^o\s*(\d+)$' -and [int]$Matches[1] -ge 1 -and [int]$Matches[1] -le $rows.Count) {
         $p = $rows[[int]$Matches[1] - 1].Page
-        if ($p) { Start-Process $p } else { Write-Host '  No release page for that app.' }
+        if ($p) { Open-WebPage $p } else { Write-Host '  No release page for that app.' }
     }
     elseif ($in -match '^\d+$' -and [int]$in -ge 1 -and [int]$in -le $rows.Count) { Update-App $rows[[int]$in - 1] }
     elseif ($in) { Write-Host '  Not a command.' }

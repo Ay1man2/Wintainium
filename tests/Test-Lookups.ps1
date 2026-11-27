@@ -20,7 +20,8 @@ $cfg = @(
     @{ name = 'ItchNew';     exe = (New-FakeExe 'a/in.exe'); source = 'itch'; url = 'https://dev.itch.io/fresh'; update = @('page') },
     @{ name = 'ForgeDown';   exe = (New-FakeExe 'a/fd.exe'); source = 'gitea'; api = 'https://codeberg.org/api/v1/repos/x/y/releases/latest'; update = @('page') },
     @{ name = 'GhBadToken';  exe = (New-FakeExe 'a/gb.exe'); source = 'github'; repo = 'o/badtoken'; update = @('page') },
-    @{ name = 'GhOk';        exe = (New-FakeExe 'a/go.exe'); source = 'github'; repo = 'o/ok'; update = @('page') }
+    @{ name = 'GhOk';        exe = (New-FakeExe 'a/go.exe'); source = 'github'; repo = 'o/ok'; update = @('page') },
+    @{ name = 'HttpForge';   exe = (New-FakeExe 'a/hf.exe'); source = 'gitea'; api = 'http://git.example/api/v1/repos/x/y/releases/latest'; update = @('page') }
 )
 $cfg | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $work 'wintainium-apps.json')
 
@@ -40,6 +41,7 @@ function global:Invoke-WebRequest {
 }
 function global:Invoke-RestMethod {
     param([Parameter(Position = 0)]$Uri, $Headers, $Method, $TimeoutSec)
+    $global:restSeen += ,[string]$Uri
     $d = (Get-Date).AddDays(-40).ToUniversalTime().ToString('o')
     switch -Regex ([string]$Uri) {
         'codeberg' { throw 'Response status code does not indicate success: 503 (Service Unavailable).' }
@@ -49,8 +51,9 @@ function global:Invoke-RestMethod {
     }
 }
 
+$global:restSeen = @()
 Push-Location $work
-$out = & (Join-Path $work 'Wintainium.ps1') list -DownloadDir (Join-Path $root 'dl') *>&1 | Out-String
+$out =& (Join-Path $work 'Wintainium.ps1') list -DownloadDir (Join-Path $root 'dl') *>&1 | Out-String
 Pop-Location
 function StatusOf($name) { ($out -split "`n" | Where-Object { $_ -match "^\s*\d+\s+$([regex]::Escape($name))\s" } | Select-Object -First 1) }
 
@@ -65,6 +68,9 @@ Check 'site-busy note names itch.io'                      ($out -match "ItchNew:
 Check 'fallback note says when the saved answer is from'  ($out -match 'ItchCached: itch\.io didn''t answer, so this shows what it reported at')
 Check 'itch.io request looks like a browser and identifies Wintainium' ($global:itchHeadersSeen -and $global:itchHeadersSeen['User-Agent'] -match '^Mozilla/5\.0 .*Wintainium/' -and $global:itchHeadersSeen['Accept'] -match 'text/html')
 Check 'itch.io request never carries the GitHub token'    ($global:itchHeadersSeen -and -not $global:itchHeadersSeen.ContainsKey('Authorization'))
+Check 'http release address is not requested'             (-not (@($global:restSeen) -match '^http://'))
+Check 'http release address shows "lookup failed"'        ((StatusOf 'HttpForge') -match 'lookup failed')
+Check 'http release address explained'                    ($out -match 'HttpForge: Wintainium only looks up releases over https')
 
 # --- token checks (functions loaded on their own) -----------------------------
 $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $work 'Wintainium.ps1'), [ref]$null, [ref]$null)

@@ -1,11 +1,15 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Builds the release download: dist\Wintainium-<version>.zip plus a .sha256 file.
+  Builds the release downloads in dist\:
 
-  The zip holds Wintainium.exe (a small launcher, compiled here from launcher\WintainiumLauncher.cs
-  with the C# compiler that ships with Windows, so no SDK or download is needed), the scripts,
-  the list of recognized apps, the example app list, the docs and the icon. Upload both files to the GitHub release.
+    Wintainium.exe                     the one-file download: double-click it and it installs itself
+                                       for the current user (it carries the scripts listed below)
+    Wintainium-<version>-portable.zip  the same files unpacked, for running from any folder
+    *.sha256                           a checksum for each, which Wintainium checks when it updates itself
+
+  Wintainium.exe is compiled here from launcher\WintainiumLauncher.cs with the C# compiler that
+  ships with Windows, so no SDK or download is needed. Attach all four files to the GitHub release.
 
     .\build\Build-Release.ps1             # runs the tests first, then builds
     .\build\Build-Release.ps1 -SkipTests
@@ -32,34 +36,62 @@ if (-not (Test-Path -LiteralPath $csc)) { throw 'The .NET Framework 4 C# compile
 
 $dist = Join-Path $root 'dist'
 $stage = Join-Path $dist "Wintainium-$ver"
-$zip = Join-Path $dist "Wintainium-$ver.zip"
+$zipName = "Wintainium-$ver-portable.zip"
+$zip = Join-Path $dist $zipName
+$exe = Join-Path $dist 'Wintainium.exe'
 if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
-if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+New-Item -ItemType Directory -Force -Path $dist | Out-Null
+Get-ChildItem -LiteralPath $dist -File | Where-Object { $_.Name -like 'Wintainium*' } | Remove-Item -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'assets') | Out-Null
 
-# launcher: stamp the version, then compile
+# The files Wintainium needs to run. The exe carries them; the portable zip has them unpacked.
+$payload = @('Wintainium.ps1', 'Find-Sources.ps1', 'known-apps.json', 'wintainium-apps.example.json', 'LICENSE', 'assets\icon.ico')
+$resources = foreach ($f in $payload) {
+    $full = Join-Path $root $f
+    if (-not (Test-Path -LiteralPath $full)) { throw "Missing $f" }
+    "/resource:$full,payload/$($f.Replace('\', '/'))"
+}
+
+# launcher: stamp the version, then compile with the scripts inside
 $cs = (Get-Content (Join-Path $root 'launcher\WintainiumLauncher.cs') -Raw) -replace '"0\.0\.0\.0"', "`"$ver.0`""
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "WintainiumLauncher-$ver.cs"
 Set-Content -LiteralPath $tmp -Value $cs -Encoding UTF8
-& $csc /nologo /target:winexe /optimize+ /platform:anycpu "/out:$(Join-Path $stage 'Wintainium.exe')" "/win32icon:$(Join-Path $root 'assets\icon.ico')" /reference:System.Windows.Forms.dll $tmp
+& $csc /nologo /target:winexe /optimize+ /platform:anycpu "/out:$exe" "/win32icon:$(Join-Path $root 'assets\icon.ico')" /reference:System.Windows.Forms.dll @resources $tmp
 if ($LASTEXITCODE) { throw 'Compiling Wintainium.exe failed.' }
 Remove-Item -LiteralPath $tmp -Force
 
-foreach ($f in 'Wintainium.ps1', 'Find-Sources.ps1', 'known-apps.json', 'wintainium-apps.example.json', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'LICENSE') {
-    Copy-Item -LiteralPath (Join-Path $root $f) -Destination $stage
+# portable zip: the same exe next to the unpacked files (it runs them in place and installs nothing)
+Copy-Item -LiteralPath $exe -Destination $stage
+foreach ($f in $payload + @('README.md', 'CHANGELOG.md', 'CONTRIBUTING.md')) {
+    Copy-Item -LiteralPath (Join-Path $root $f) -Destination (Join-Path $stage $f)
 }
-foreach ($f in 'icon.ico', 'icon-256.png') {
-    Copy-Item -LiteralPath (Join-Path $root "assets\$f") -Destination (Join-Path $stage 'assets')
-}
-
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($stage, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
-$hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower()
-Set-Content -LiteralPath "$zip.sha256" -Value "$hash  Wintainium-$ver.zip" -Encoding ASCII
+
+# Wintainium.exe only runs the scripts beside it when every file it carries is byte-identical, so
+# check the zip holds exactly those bytes; otherwise portable users would get an install instead.
+$read = [IO.Compression.ZipFile]::OpenRead($zip)
+try {
+    $entries = @{}
+    foreach ($e in $read.Entries) { $entries[$e.FullName.Replace('\', '/')] = $e }
+    foreach ($f in $payload) {
+        $e = $entries["Wintainium-$ver/$($f.Replace('\', '/'))"]
+        if (-not $e) { throw "The portable zip is missing $f." }
+        $mem = New-Object IO.MemoryStream
+        $s = $e.Open(); try { $s.CopyTo($mem) } finally { $s.Dispose() }
+        $want = [IO.File]::ReadAllBytes((Join-Path $root $f))
+        if ([Convert]::ToBase64String($mem.ToArray()) -ne [Convert]::ToBase64String($want)) { throw "$f in the portable zip differs from the copy inside Wintainium.exe." }
+    }
+} finally { $read.Dispose() }
+
+foreach ($f in $exe, $zip) {
+    $hash = (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash.ToLower()
+    $name = Split-Path -Leaf $f
+    Set-Content -LiteralPath "$f.sha256" -Value "$hash  $name" -Encoding ASCII
+    Write-Host ("{0,-34} SHA-256 {1}" -f $name, $hash)
+}
 
 Write-Host ''
-Write-Host "Built $zip" -ForegroundColor Green
-Write-Host "SHA-256 $hash"
-Write-Host ''
-Write-Host 'Next: try it (unzip dist\*.zip somewhere else and double-click Wintainium.exe), then attach'
-Write-Host "Wintainium-$ver.zip and Wintainium-$ver.zip.sha256 to the GitHub release."
+Write-Host "Built Wintainium $ver in $dist" -ForegroundColor Green
+Write-Host 'Next: try dist\Wintainium.exe on its own (copy it somewhere else first), then attach these four'
+Write-Host "files to the GitHub release: Wintainium.exe, Wintainium.exe.sha256, $zipName, $zipName.sha256"

@@ -15,6 +15,7 @@ $DownloadDir = Join-Path $root 'dl'; $InstallRoot = Join-Path $root 'apps'
 $script:sevenZip = '/nonexistent/7z.exe'; $ua = @{ 'User-Agent' = 't' }; $ghHeaders = $ua
 $viaLabel = @{ emudeck='EmuDeck'; inapp='in-app'; installer='installer'; zip='zip install'; download='download'; page='release page' }
 $GraceDays = 3; $CacheMinutes = 60; $script:cache = @{}
+$script:AllowFileUrls = $true   # the release zips are served from disk via file:// URLs
 function Save-Cache { }
 $fails = 0
 function Check($name, $cond) { if ($cond) { "PASS  $name" } else { "FAIL  $name"; $script:fails++ } }

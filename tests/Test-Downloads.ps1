@@ -12,6 +12,7 @@ New-Item -ItemType Directory $root | Out-Null
 if (-not $env:TEMP) { $env:TEMP = [IO.Path]::GetTempPath() }; $DownloadDir = Join-Path $root 'dl'; $InstallRoot = Join-Path $root 'apps'
 $script:sevenZip = '/nonexistent/7z.exe'; $ua = @{ 'User-Agent' = 't' }; $ghHeaders = $ua
 $viaLabel = @{ emudeck='EmuDeck'; inapp='in-app'; installer='installer'; zip='zip install'; download='download'; page='release page' }
+$script:AllowFileUrls = $true   # the fixtures below are served from disk via file:// URLs
 $fails = 0
 function Check($name, $cond) { if ($cond) { "PASS  $name" } else { "FAIL  $name"; $script:fails++ } }
 function global:Start-Process { param($FilePath) $global:started += ,$FilePath }
@@ -63,6 +64,51 @@ Check 'missing file reported as failed download'   ($out -match 'Download failed
 $row2 = [pscustomobject]@{ App='S'; Latest='v2026.4.0'; Assets=@(); Def=[pscustomobject]@{ downloadUrl='https://dl.example/{version}/x-{version}.zip' } }
 $a = Select-Asset $row2
 Check 'downloadUrl fills {version}'                ($a.browser_download_url -eq 'https://dl.example/2026.4.0/x-2026.4.0.zip' -and $a.name -eq 'x-2026.4.0.zip')
+
+# 6b. download names from the release can't leave the download folder
+$dlFull = [IO.Path]::GetFullPath($DownloadDir).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+foreach ($n in '..\..\x.exe', '../x.exe', 'C:\x.exe', '\\host\share\x.exe', 'sub/dir\x.exe') {
+    $p = Get-SafeDownloadPath $DownloadDir $n
+    Check "safe name: '$n' stays in the download folder" ($p -and $p.StartsWith($dlFull) -and (Split-Path $p -Leaf) -eq 'x.exe')
+}
+foreach ($n in '', '.', '..', '..\', 'CON', 'nul.txt', 'COM1.zip', 'lpt9', 'CONIN$', 'conout$.txt', 'NUL .txt', "COM$([char]0xB9).zip", "LPT$([char]0xB3)", 'x.exe.', 'x.exe ', 'a:b.zip', 'a?.zip', "a`tb.zip") {
+    Check "safe name: '$n' refused" (-not (Get-SafeDownloadPath $DownloadDir $n))
+}
+foreach ($n in 'CONSOLE.zip', 'com10.exe', 'nul-tool.zip', 'AUXtool.7z') {
+    Check "safe name: '$n' allowed" ((Split-Path (Get-SafeDownloadPath $DownloadDir $n) -Leaf) -eq $n)
+}
+Check 'safe name: normal name unchanged' ((Split-Path (Get-SafeDownloadPath $DownloadDir 'Tool-v1.2-Windows-x64.zip') -Leaf) -eq 'Tool-v1.2-Windows-x64.zip')
+$decoyDir = Join-Path $root 'escape'; New-Item -ItemType Directory $decoyDir | Out-Null
+$decoy = Join-Path $decoyDir 'Tool-v1.2-Windows-x64.zip'; Set-Content $decoy 'keep me'
+$global:started = @()
+$evil = [pscustomobject]@{ App='Evil'; Latest='v1.2'; Page='https://p'; Def=[pscustomobject]@{}
+        Assets=@([pscustomobject]@{ name='..\escape\Tool-v1.2-Windows-x64.zip'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip') }) }
+$got = Get-AssetFile $evil 6>$null
+Check 'traversal name: file lands inside the download folder' ($got -and ([IO.Path]::GetFullPath($got)).StartsWith($dlFull))
+Check 'traversal name: file at the target is not touched' ((Get-Content $decoy -Raw).Trim() -eq 'keep me')
+Check 'traversal name: nothing started'            (@($global:started).Count -eq 0)
+$evil.Assets = @([pscustomobject]@{ name='CON.zip'; browser_download_url=(U 'Tool-v1.2-Windows-x64.zip') })
+$out = Get-AssetFile $evil 6>&1 | Out-String
+Check 'reserved name: refused with a message, no download' ($out -match 'unsafe file name' -and $out -cnotmatch 'Downloading ')
+
+# 6c. only https downloads and checksums (file:// is a test-only exception, UNC never)
+Check 'https link accepted'                        (Test-HttpsUrl 'https://example.org/x.zip')
+foreach ($u in 'http://example.org/x.zip', 'ftp://example.org/x.zip', '\\host\share\x.zip', 'file://host/share/x.zip', 'x.zip', '') {
+    Check "link refused even in tests: '$u'" (-not (Test-HttpsUrl $u))
+}
+$script:AllowFileUrls = $false
+Check 'file:// refused outside tests'              (-not (Test-HttpsUrl (U 'Tool-v1.2-Windows-x64.zip')))
+$httpRow = [pscustomobject]@{ App='Http'; Latest='v1.2'; Page='https://p'; Def=[pscustomobject]@{}
+        Assets=@([pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip'; browser_download_url='http://example.invalid/Tool-v1.2-Windows-x64.zip' }) }
+Set-Content $f 'previous download'
+$out = (Get-AssetFile $httpRow 6>&1 | ForEach-Object { "$_" }) -join "`n"   # no line wrapping
+Check 'http download refused with a message'       ($out -match 'only downloads over https' -and $out -cnotmatch 'Downloading ')
+Check 'http download: existing file not deleted'   ((Get-Content $f -Raw).Trim() -eq 'previous download')
+$p = Get-PublishedHash ([pscustomobject]@{ Assets=@([pscustomobject]@{ name='Tool-v1.2-Windows-x64.zip.sha256'; browser_download_url='http://example.invalid/x.sha256' }) }) 'Tool-v1.2-Windows-x64.zip'
+Check 'http checksum file not fetched'             ($p.Error -match 'not an https link')
+$out = (Get-AssetFile $row 6>&1 | ForEach-Object { "$_" }) -join "`n"
+Check 'file:// download refused outside tests'     ($out -match 'only downloads over https')
+$script:AllowFileUrls = $true
 
 # 7. Expand-ToFolder flattens single top folder
 $dest = Join-Path $root 'inst'
@@ -141,5 +187,25 @@ try { $out = Get-AssetFile $row 6>&1 | Out-String } catch { $err = $_ }
 Check 'late quarantine: no crash'                  (-not $err)
 Check 'late quarantine: reported as removed'       ($out -match 'Windows Security removed')
 Remove-Item function:Get-FileHash -ErrorAction SilentlyContinue
+
+# 13. release page links: only absolute https links are opened
+$global:started = @()
+Open-WebPage 'https://github.com/o/r/releases/tag/v1' 6>$null
+Check 'page link: https opened'                    (@($global:started) -contains 'https://github.com/o/r/releases/tag/v1')
+$global:started = @()
+Open-WebPage 'https://example.org/a b' 6>$null
+Check 'page link: opened in its checked, parsed form' (@($global:started) -contains 'https://example.org/a%20b')
+foreach ($u in 'http://example.org/', 'file:///C:/Windows/System32/calc.exe', '\\attacker\share\x.exe', 'C:\Windows\System32\calc.exe', 'calc.exe', 'javascript:alert(1)', '') {
+    $global:started = @()
+    $out = (Open-WebPage $u 6>&1 | ForEach-Object { "$_" }) -join "`n"
+    Check "page link: '$u' not opened, and said so" (@($global:started).Count -eq 0 -and $out -match "isn't an https link")
+}
+$global:started = @()
+[void](Get-AssetFile ([pscustomobject]@{ App='NoAsset'; Page='\\attacker\share\x.exe'; Assets=@(); Def=[pscustomobject]@{} }) 6>$null)
+Check 'no matching download: UNC page link not opened' (@($global:started).Count -eq 0)
+# every Start-Process in the app opens a program, a folder or Explorer, never a link it was given
+$cmds = $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Start-Process' }, $true)
+$linky = @($cmds | Where-Object { $_.Extent.Text -match '\.Page\b|PageUrl|https?:|\$p\b|\$url\b' -and $_.Extent.Text -ne 'Start-Process $u.AbsoluteUri' })
+Check 'no Start-Process on a page link outside Open-WebPage' ($linky.Count -eq 0)
 "`n$fails failure(s)"
 Remove-Item -Recurse -Force $root

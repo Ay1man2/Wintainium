@@ -105,12 +105,18 @@ try {
     Set-Content (Join-Path $work 'Wintainium.ps1') '# stub'
     $res = & (Join-Path $work 'Find-Sources.ps1') @roots -PassThru -SkipRepos 6>$null
     $w = @($res.Candidates) | Where-Object Name -eq 'Wintainium'
-    Check 'Wintainium offered as a ticked entry' ($w -and $w.Selected -and $w.Kind -eq 'known' -and $w.Def.repo -eq 'Ay1man2/Wintainium' -and ($w.Def.update -join ',') -eq 'page')
+    Check 'Wintainium offered as a ticked entry' ($w -and $w.Selected -and $w.Kind -eq 'known' -and $w.Def.repo -eq 'Ay1man2/Wintainium')
     Check 'Wintainium entry points at its script when there is no .exe' ($w.Def.exe -eq (Join-Path $work 'Wintainium.ps1'))
     Set-Content (Join-Path $work 'Wintainium.exe') 'x'
     $res = & (Join-Path $work 'Find-Sources.ps1') @roots -PassThru -SkipRepos 6>$null
     $w = @($res.Candidates) | Where-Object Name -eq 'Wintainium'
     Check 'Wintainium entry prefers Wintainium.exe' ($w.Def.exe -eq (Join-Path $work 'Wintainium.exe'))
+    Check 'zip or clone copy updates from the release page' (($w.Def.update -join ',') -eq 'page')
+    Set-Content (Join-Path $work 'installed-version.txt') '0.2.0.0'
+    $res = & (Join-Path $work 'Find-Sources.ps1') @roots -PassThru -SkipRepos 6>$null
+    $w = @($res.Candidates) | Where-Object Name -eq 'Wintainium'
+    Check 'installed copy updates itself from the verified Wintainium.exe' (($w.Def.update -join ',') -eq 'installer,page' -and 'Wintainium.exe' -match $w.Def.asset -and 'Wintainium-0.2.0-portable.zip' -notmatch $w.Def.asset)
+    Remove-Item (Join-Path $work 'installed-version.txt')
 
     # hidden entries stay hidden, and the scan says how many
     ConvertTo-Json @{ scanIgnore = @('pcsx2/pcsx2') } | Set-Content (Join-Path $work 'wintainium-settings.json')
