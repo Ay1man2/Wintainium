@@ -82,6 +82,11 @@ public sealed record CommandLine
             }
         }
 
+        if (c.InstallOnly && c.Data is not null)
+        {
+            return new CommandLine { Error = "--install-only can't be used with --data." };
+        }
+
         return c;
     }
 }

@@ -18,10 +18,28 @@ internal static class SelfStart
     private static Version Own => Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
 
     /// <summary>
-    /// A published Wintainium.exe is one file; a development build has Wintainium.dll beside it and
-    /// always runs in place.
+    /// A published Wintainium.exe carries its code inside, so its assembly has no file of its own; a
+    /// development build loads Wintainium.dll from disk and always runs in place. A Wintainium.dll put
+    /// next to the published exe doesn't change this.
     /// </summary>
-    private static bool SingleFile => !File.Exists(Path.Combine(AppContext.BaseDirectory, "Wintainium.dll"));
+#pragma warning disable IL3000 // an empty Location is exactly what this checks for
+    private static bool SingleFile => string.IsNullOrEmpty(typeof(SelfStart).Assembly.Location);
+#pragma warning restore IL3000
+
+    /// <summary>The installed exe's own file version, for an install whose marker is missing or unreadable.</summary>
+    private static Version? ExeVersion(string exe)
+    {
+        try
+        {
+            FileVersionInfo fi = FileVersionInfo.GetVersionInfo(exe);
+            var v = new Version(fi.FileMajorPart, fi.FileMinorPart, fi.FileBuildPart, fi.FilePrivatePart);
+            return v == new Version(0, 0, 0, 0) ? null : v;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Installs or starts the installed copy when needed. Returns null when this process should go
@@ -32,11 +50,11 @@ internal static class SelfStart
         string here = AppContext.BaseDirectory;
         string dir = SelfInstaller.InstallDir();
         string? ownExe = Environment.ProcessPath;
-        switch (SelfInstaller.Decide(here, dir, SingleFile, Own))
+        switch (SelfInstaller.Decide(here, dir, SingleFile, Own, WindowsIntegration.DropFolders(), ExeVersion))
         {
             case StartMode.RunHere:
-                RefreshInstalledCopy(here, dir, ownExe);
-                return installOnly ? 0 : null;
+                bool ok = RefreshInstalledCopy(here, dir, ownExe, installOnly);
+                return installOnly ? (ok ? 0 : 1) : null;
             case StartMode.InstallAndStart:
                 if (ownExe is null || !Install(ownExe, dir, installOnly))
                 {
@@ -50,17 +68,17 @@ internal static class SelfStart
     }
 
     /// <summary>The installed copy, replaced by hand with a newer exe, updates its marker and Settings > Apps entry.</summary>
-    private static void RefreshInstalledCopy(string here, string dir, string? ownExe)
+    private static bool RefreshInstalledCopy(string here, string dir, string? ownExe, bool quiet)
     {
         if (ownExe is null || !SelfInstaller.SameFolder(here, dir))
         {
-            return;
+            return true;
         }
 
         Version? mark = SelfInstaller.ReadMarker(here);
         if (mark is null || Own <= mark)
         {
-            return;
+            return true;
         }
 
         try
@@ -68,10 +86,16 @@ internal static class SelfStart
             File.WriteAllText(Path.Combine(here, SelfInstaller.Marker), Own.ToString());
             SelfInstaller.RemoveLegacyFiles(here);
             WindowsIntegration.Register(here, ownExe, Own);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show("Wintainium could not update its files:\n\n" + ex.Message, AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (!quiet)
+            {
+                MessageBox.Show("Wintainium could not update its files:\n\n" + ex.Message, AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+
+            return false;
         }
     }
 
@@ -171,21 +195,40 @@ internal static class SelfStart
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
 
+        if (!SelfInstaller.SafeForCmd(dir))
+        {
+            MessageBox.Show(
+                $"Wintainium can't remove its folder automatically because its name has a %, ! or \" in it:\n{dir}\n\nClose Wintainium and delete that folder yourself.",
+                AppInfo.Name,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return 1;
+        }
+
         WindowsIntegration.RemoveShortcuts(dir);
         WindowsIntegration.Unregister();
+        MessageBox.Show("Wintainium has been removed.", AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Information);
 
-        // this exe may be the installed one, so a short-lived cmd.exe removes the files once it has exited
+        // last of all: this exe may be the installed one, so a short-lived cmd.exe removes the files,
+        // retrying the exe until this process has exited
         var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), SelfInstaller.RemovalCommand(dir, deleteData))
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = Path.GetTempPath(),
         };
-        using (Process.Start(psi))
+        try
         {
+            using (Process.Start(psi))
+            {
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+            MessageBox.Show($"Some files could not be removed:\n{dir}\n\n{ex.Message}", AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return 1;
         }
 
-        MessageBox.Show("Wintainium has been removed.", AppInfo.Name, MessageBoxButton.OK, MessageBoxImage.Information);
         return 0;
     }
 }

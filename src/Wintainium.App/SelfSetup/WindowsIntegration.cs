@@ -53,7 +53,9 @@ internal static class WindowsIntegration
             {
                 ShellLink.Write(Path.Combine(folder, "Wintainium.lnk"), exe, "", Path.GetDirectoryName(exe) ?? "", ShortcutDescription, exe, AppId);
             }
-            catch (Exception ex) when (ex is COMException or IOException or UnauthorizedAccessException or InvalidCastException)
+#pragma warning disable CA1031 // one failed shortcut must not stop the other, whatever the shell throws
+            catch (Exception ex)
+#pragma warning restore CA1031
             {
                 log.Write($"Could not create a shortcut in {folder}: {ex.Message}", LogColor.Yellow);
             }
@@ -65,6 +67,11 @@ internal static class WindowsIntegration
     {
         foreach (string folder in ShortcutFolders(true, true))
         {
+            if (folder.Length == 0)
+            {
+                continue;
+            }
+
             string lnk = Path.Combine(folder, "Wintainium.lnk");
             if (!File.Exists(lnk))
             {
@@ -79,7 +86,9 @@ internal static class WindowsIntegration
                     File.Delete(lnk);
                 }
             }
-            catch (Exception ex) when (ex is COMException or IOException or UnauthorizedAccessException or InvalidCastException)
+#pragma warning disable CA1031 // uninstall goes on whatever the shell throws for one shortcut
+            catch (Exception)
+#pragma warning restore CA1031
             {
                 // a shortcut left behind only points at nothing
             }
@@ -116,6 +125,11 @@ internal static class WindowsIntegration
 
     public static void Unregister()
     {
+        if (SelfInstaller.IsTestInstall())
+        {
+            return;
+        }
+
         try
         {
             Registry.CurrentUser.DeleteSubKeyTree(SelfInstaller.UninstallKey, throwOnMissingSubKey: false);
@@ -125,6 +139,34 @@ internal static class WindowsIntegration
             // nothing more to do
         }
     }
+
+    /// <summary>
+    /// N1: folders a browser saves downloads into. A portable.txt there may have been put there by a
+    /// website, so a Wintainium.exe there never runs in place.
+    /// </summary>
+    public static IReadOnlyList<string> DropFolders()
+    {
+        var folders = new List<string>
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Path.GetTempPath(),
+        };
+        if (SHGetKnownFolderPath(DownloadsFolderId, 0, IntPtr.Zero, out IntPtr p) == 0)
+        {
+            try
+            {
+                folders.Add(Marshal.PtrToStringUni(p) ?? "");
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(p);
+            }
+        }
+
+        return folders;
+    }
+
+    private static readonly Guid DownloadsFolderId = new("374DE290-123F-4565-9164-39C4925E467B");
 
     /// <summary>True if another process is running that exe (an open Wintainium window).</summary>
     public static bool OtherInstanceRunning(string exe)
@@ -170,4 +212,8 @@ internal static class WindowsIntegration
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
+
+    [DllImport("shell32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern int SHGetKnownFolderPath([MarshalAs(UnmanagedType.LPStruct)] Guid rfid, uint flags, IntPtr token, out IntPtr path);
 }

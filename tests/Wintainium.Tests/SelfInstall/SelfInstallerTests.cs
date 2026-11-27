@@ -53,6 +53,43 @@ public sealed class SelfInstallerTests : IDisposable
     }
 
     [Fact]
+    public void An_unpacked_v030_portable_zip_runs_in_place()
+    {
+        foreach (string f in SelfInstaller.V030PortableFiles)
+        {
+            dir.Write("Old/" + f, "x");
+        }
+
+        Assert.Equal(StartMode.RunHere, SelfInstaller.Decide(dir.File("Old"), Install, singleFile: true, V040));
+    }
+
+    [Fact]
+    public void Portable_files_in_a_downloads_folder_are_not_trusted()
+    {
+        // N1: a website can save portable.txt (and a crafted app list) next to the downloaded exe
+        dir.Write("Downloads/" + SelfInstaller.PortableMarker, "");
+        Assert.Equal(StartMode.InstallAndStart, SelfInstaller.Decide(Downloads, Install, singleFile: true, V040, [Downloads + Path.DirectorySeparatorChar]));
+        foreach (string f in SelfInstaller.V030PortableFiles)
+        {
+            dir.Write("Downloads/" + f, "x");
+        }
+
+        Assert.False(SelfInstaller.IsPortable(Downloads, [Downloads]));
+        Assert.True(SelfInstaller.IsPortable(Downloads, [dir.File("Desktop")]));
+    }
+
+    [Theory]
+    [InlineData("0.5.0.0", StartMode.StartInstalled)]
+    [InlineData("0.3.0.0", StartMode.InstallAndStart)]
+    [InlineData(null, StartMode.InstallAndStart)]
+    public void Without_a_marker_the_installed_exe_version_decides(string? exeVersion, StartMode expected)
+    {
+        dir.Write("Programs/Wintainium/Wintainium.exe", "exe");
+        Version? v = exeVersion is null ? null : Version.Parse(exeVersion);
+        Assert.Equal(expected, SelfInstaller.Decide(Downloads, Install, singleFile: true, V040, exeVersion: _ => v));
+    }
+
+    [Fact]
     public void A_download_with_no_install_installs()
     {
         Directory.CreateDirectory(Downloads);
@@ -101,8 +138,12 @@ public sealed class SelfInstallerTests : IDisposable
 
         dir.Write("Programs/Wintainium/wintainium-apps.json", "[]");
         string own = dir.Write("Downloads/Wintainium.exe", "new exe");
+        dir.Write("Programs/Wintainium/Wintainium.ps1", "old script");
         SelfInstaller.Install(own, Install, V040);
         Assert.All(SelfInstaller.LegacyFiles, f => Assert.False(File.Exists(Path.Combine(Install, f)), f));
+
+        // a stub stays, so a v0.3.0 exe sees an install and doesn't downgrade it
+        Assert.Equal(SelfInstaller.StubText, File.ReadAllText(Path.Combine(Install, SelfInstaller.StubScript)));
         Assert.False(Directory.Exists(Path.Combine(Install, "assets")));
         Assert.True(File.Exists(Path.Combine(Install, "wintainium-apps.json")));
         Assert.Equal("new exe", File.ReadAllText(Path.Combine(Install, "Wintainium.exe")));
@@ -146,13 +187,38 @@ public sealed class SelfInstallerTests : IDisposable
     public void Removal_keeps_user_files_unless_asked()
     {
         string keep = SelfInstaller.RemovalCommand(@"C:\U\Wintainium", deleteData: false);
-        Assert.StartsWith("/c ping -n 3 127.0.0.1 >nul & del /f /q ", keep, StringComparison.Ordinal);
-        Assert.Contains("Wintainium.exe", keep, StringComparison.Ordinal);
+        Assert.StartsWith("/d /v:off /c del /f /q \"", keep, StringComparison.Ordinal);
+        Assert.Contains("Wintainium.exe\"", keep, StringComparison.Ordinal);
+        Assert.Contains("Wintainium.exe.new\"", keep, StringComparison.Ordinal);
         Assert.Contains(SelfInstaller.Marker, keep, StringComparison.Ordinal);
         Assert.Contains("Wintainium.ps1", keep, StringComparison.Ordinal);
+        Assert.Contains("for /l %i in (1,1,60) do", keep, StringComparison.Ordinal);
         Assert.DoesNotContain("rmdir /s", keep, StringComparison.Ordinal);
         Assert.All(SelfInstaller.UserFiles, f => Assert.DoesNotContain(f, keep, StringComparison.Ordinal));
 
-        Assert.Equal("/c ping -n 3 127.0.0.1 >nul & rmdir /s /q \"C:\\Users\\A B\\Wintainium\"", SelfInstaller.RemovalCommand(@"C:\Users\A B\Wintainium", deleteData: true));
+        string all = SelfInstaller.RemovalCommand(@"C:\Users\A B\Wintainium", deleteData: true);
+        Assert.Equal(
+            "/d /v:off /c for /l %i in (1,1,60) do @if exist \"C:\\Users\\A B\\Wintainium\" (rmdir /s /q \"C:\\Users\\A B\\Wintainium\" 2>nul & if exist \"C:\\Users\\A B\\Wintainium\" ping -n 2 127.0.0.1 >nul)",
+            all);
+    }
+
+    [Fact]
+    public void Removal_quotes_every_path_for_cmd()
+    {
+        // a path with no spaces is still quoted, so & in it can't start a second command
+        string cmd = SelfInstaller.RemovalCommand(@"C:\Users\R&D\Wintainium", deleteData: true);
+        Assert.DoesNotContain(" C:\\Users", cmd, StringComparison.Ordinal);
+        Assert.Contains("\"C:\\Users\\R&D\\Wintainium\"", cmd, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\100%\Wintainium")]
+    [InlineData(@"C:\Users\Hi!\Wintainium")]
+    [InlineData("C:\\Users\\a\"b\\Wintainium")]
+    [InlineData("C:\\Users\\a\nb")]
+    public void Removal_refuses_folders_cmd_cannot_quote(string folder)
+    {
+        Assert.False(SelfInstaller.SafeForCmd(folder));
+        Assert.Throws<ArgumentException>(() => SelfInstaller.RemovalCommand(folder, deleteData: false));
     }
 }
