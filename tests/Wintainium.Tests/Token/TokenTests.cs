@@ -83,6 +83,36 @@ public class TokenTests
         Assert.Contains("did not accept", t.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Network_failure_is_not_blamed_on_the_token()
+    {
+        var http = new FakeHttp().OnThrow(GitHubTokenCheck.RateLimitUrl, new HttpRequestException("no route"));
+        using HttpClient client = http.Client();
+        TokenCheckResult t = await GitHubTokenCheck.CheckAsync(client, "ghp_good");
+        Assert.False(t.Ok);
+        Assert.Equal(GitHubTokenCheck.NetworkMessage, t.Message);
+
+        var slow = new FakeHttp().OnThrow(GitHubTokenCheck.RateLimitUrl, new TaskCanceledException("timed out"));
+        using HttpClient slowClient = slow.Client();
+        Assert.Equal(GitHubTokenCheck.NetworkMessage, (await GitHubTokenCheck.CheckAsync(slowClient, "ghp_good")).Message);
+
+        var down = new FakeHttp().OnStatus(GitHubTokenCheck.RateLimitUrl, HttpStatusCode.ServiceUnavailable);
+        using HttpClient downClient = down.Client();
+        TokenCheckResult d = await GitHubTokenCheck.CheckAsync(downClient, "ghp_good");
+        Assert.False(d.Ok);
+        Assert.DoesNotContain("did not accept", d.Message, StringComparison.Ordinal);
+        Assert.Contains("503", d.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cancelling_the_check_is_passed_on()
+    {
+        using HttpClient client = GitHub().Client();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => GitHubTokenCheck.CheckAsync(client, "ghp_good", cts.Token));
+    }
+
     [Fact(DisplayName = "empty token reported")]
     public async Task Empty_token_reported()
     {
@@ -182,6 +212,47 @@ public class TokenTests
 
         string? clean = await new TokenStore(path, new FakeProtector(), () => "ghp_good").GetLookupTokenAsync(client, NullLog.Instance);
         Assert.Equal("ghp_good", clean);
+    }
+
+    [Fact]
+    public async Task Expiry_is_cleared_when_no_token_is_used()
+    {
+        using var dir = new TempDir();
+        string path = dir.File("wintainium-token.xml");
+        TokenFile.Write(path, new StoredToken("ghp_saved", new DateTime(2027, 1, 1)), new FakeProtector());
+        var store = new TokenStore(path, new FakeProtector(), () => null);
+        Assert.NotNull(store.ReadSaved(NullLog.Instance));
+        Assert.NotNull(store.Expires);
+
+        File.Delete(path);
+        using HttpClient client = GitHub().Client();
+        Assert.Null(await store.GetLookupTokenAsync(client, NullLog.Instance));
+        Assert.Null(store.Expires);
+    }
+
+    /// <summary>
+    /// Reads a copy of the owner's real token file (saved by v0.3.0) with real DPAPI. Only checks
+    /// that a token comes out; it never prints the token or sends it anywhere.
+    /// </summary>
+    [RealTokenFact]
+    public void Reads_the_real_token_file_saved_by_v030()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string source = Environment.GetEnvironmentVariable(RealTokenFactAttribute.Variable)!.Trim().Trim('"');
+        Assert.True(File.Exists(source), $"{RealTokenFactAttribute.Variable} names a file that doesn't exist: {source}");
+        using var dir = new TempDir();
+        string copy = dir.File("wintainium-token.xml");
+        File.Copy(source, copy);
+
+        var log = new MemoryLog();
+        StoredToken? t = new TokenStore(copy, new DpapiProtector(), () => null).ReadSaved(log);
+        Assert.True(t is not null, "The token file could not be read: " + log.AllText);
+        Assert.True(t.Token.Length >= 20, "The token read back is too short to be a GitHub token.");
+        Assert.Equal(t.Token.Trim(), t.Token);
     }
 
     [WindowsFact]

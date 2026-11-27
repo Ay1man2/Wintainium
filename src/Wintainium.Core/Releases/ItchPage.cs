@@ -58,6 +58,8 @@ public static partial class ItchPage
             pick = 0;
         }
 
+        // Names and versions are kept as the page has them, entities included, as v0.3.0 did:
+        // the tag is compared with installedTag values that v0.3.0 saved.
         (string name, string version, DateTime? when, _) = uploads[pick];
         return new ReleaseInfo
         {

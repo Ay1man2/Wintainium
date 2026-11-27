@@ -15,6 +15,17 @@ public class VersionCompareTests
         Assert.Equal(number, VersionCompare.TagNumber(tag));
 
     [Theory]
+    [InlineData("2.9.181", "3.0.0", true)]     // X-09: a real major jump
+    [InlineData("2.9.181", "2.10.0", true)]    // X-09: minor change with x.y.z
+    [InlineData("1.2.3", "2024.11.1", null)]   // date-style tags: the date decides
+    [InlineData("1.4.0", "9.1.0", null)]       // majors far apart: the date decides
+    [InlineData("1.4.0", "4.0.0", true)]       // three majors apart still counts
+    [InlineData("1.0.0.0", "2.5.1", null)]     // placeholder version: the date decides
+    [InlineData("2023.1.0", "2024.11.1", true)] // both date-style
+    public void Different_schemes_compare_only_when_alike(string installed, string release, bool? older) =>
+        Assert.Equal(older, VersionCompare.IsOlder(installed, release));
+
+    [Theory]
     [InlineData("2.9.181", "2.9.181", true)]
     [InlineData("2.9.181.0", "2.9.181", true)]
     [InlineData("0.0.38-14567-abc", "0.0.38", true)]

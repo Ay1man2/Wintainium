@@ -77,6 +77,14 @@ public sealed class StatusTests : IDisposable
 
     public void Dispose() => dir.Dispose();
 
+    [Fact]
+    public void An_app_with_no_lookup_answer_is_lookup_failed_not_blank()
+    {
+        var app = new Wintainium.Core.Data.AppEntry(JsonNode.Parse("""{ "name": "NoAnswer", "exe": "C:/x/n.exe", "source": "github", "repo": "o/n" }""")!.AsObject());
+        AppRow row = StatusEngine.BuildRow(app, null, new ExeInfo(true, "1.0.1", DateTime.UtcNow), 3, goldSelf: false);
+        Assert.Equal(Statuses.LookupFailed, row.Status);
+    }
+
     private AppRow Row(string name) => rows.Single(r => r.App == name);
 
     [Fact(DisplayName = "GhOld flagged UPDATE")]

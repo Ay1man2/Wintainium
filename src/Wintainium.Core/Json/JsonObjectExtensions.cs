@@ -159,7 +159,7 @@ public static class JsonObjectExtensions
         return double.Parse(value.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture);
     }
 
-    /// <summary>[int]$obj.name when the field is truthy, else null.</summary>
+    /// <summary>[int]$obj.name when the field is truthy and at least 1, else null.</summary>
     public static int? GetPositiveInt(this JsonObject obj, string name)
     {
         JsonNode? node = obj.GetField(name);
@@ -172,7 +172,8 @@ public static class JsonObjectExtensions
         if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out double d))
         {
             // PowerShell's [int] rounds half to even
-            return (int)Math.Round(d, MidpointRounding.ToEven);
+            double r = Math.Round(d, MidpointRounding.ToEven);
+            return r is >= 1 and <= int.MaxValue ? (int)r : null;
         }
 
         return null;

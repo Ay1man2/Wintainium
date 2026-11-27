@@ -32,7 +32,15 @@ public sealed class AppList
         {
             log.Write($"No app list yet. Starting an empty one at {path}", LogColor.Yellow);
             log.Write("(Use Add app or Scan to add apps.)", LogColor.Yellow);
-            JsonFiles.WriteTextAtomic(path, "[]" + Environment.NewLine, keepBackup: false);
+            try
+            {
+                JsonFiles.WriteTextAtomic(path, "[]" + Environment.NewLine, keepBackup: false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new AppListLoadException(path, ex.Message);
+            }
+
             return new AppList(path, []);
         }
 
@@ -41,7 +49,7 @@ public sealed class AppList
         {
             return new AppList(path, ParseEntries(JsonFiles.ReadText(path)));
         }
-        catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException)
+        catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException or UnauthorizedAccessException)
         {
             firstError = ex.Message;
         }
@@ -56,12 +64,14 @@ public sealed class AppList
                 string broken = $"{path}.broken-{stamp}";
                 File.Copy(path, broken, overwrite: true);
                 var list = new AppList(path, fromBackup);
-                list.Save();
+
+                // no backup of the broken file: .bak must stay the last good copy
+                list.Save(keepBackup: false);
                 log.Write($"{Path.GetFileName(path)} could not be read ({firstError}).", LogColor.Red);
                 log.Write($"Restored the previous copy from {Path.GetFileName(bak)}. The unreadable file was kept as {Path.GetFileName(broken)}.", LogColor.Yellow);
                 return list;
             }
-            catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException)
+            catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException or UnauthorizedAccessException)
             {
                 // fall through to the error below
             }
@@ -86,10 +96,11 @@ public sealed class AppList
             node is JsonObject o ? new AppEntry(o) : throw new InvalidDataException("an entry in the list is not an object");
     }
 
-    public void Save()
+    /// <summary>Writes the list; the previous file becomes .bak unless <paramref name="keepBackup"/> is false.</summary>
+    public void Save(bool keepBackup = true)
     {
         var arr = new JsonArray([.. entries.Select(e => e.Json.DeepClone())]);
-        JsonFiles.WriteFileAtomic(FilePath, arr);
+        JsonFiles.WriteFileAtomic(FilePath, arr, keepBackup);
     }
 
     public AppEntry? Find(string name) =>

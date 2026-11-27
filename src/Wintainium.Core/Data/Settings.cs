@@ -35,7 +35,7 @@ public sealed class Settings
                     obj = o;
                 }
             }
-            catch (Exception ex) when (ex is JsonException or IOException)
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
             {
                 obj = [];
             }
