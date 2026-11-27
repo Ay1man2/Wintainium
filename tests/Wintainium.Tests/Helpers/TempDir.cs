@@ -11,7 +11,8 @@ public sealed class TempDir : IDisposable
 
     public string Path { get; }
 
-    public string File(string relative) => System.IO.Path.Combine(Path, relative);
+    /// <summary>Full path of a file in the folder; forward slashes become the OS separator.</summary>
+    public string File(string relative) => System.IO.Path.GetFullPath(System.IO.Path.Combine(Path, relative));
 
     public string Write(string relative, string text)
     {
