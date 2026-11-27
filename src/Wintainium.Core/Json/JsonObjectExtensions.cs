@@ -73,8 +73,9 @@ public static class JsonObjectExtensions
                 case JsonValueKind.False:
                     return "False";
                 case JsonValueKind.Number:
-                    return v.TryGetValue(out long l) ? l.ToString(CultureInfo.InvariantCulture)
-                        : v.GetValue<double>().ToString(CultureInfo.InvariantCulture);
+                    return long.TryParse(v.ToJsonString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out long l)
+                        ? l.ToString(CultureInfo.InvariantCulture)
+                        : NumberOf(v).ToString(CultureInfo.InvariantCulture);
                 case JsonValueKind.Null:
                     return "";
             }
@@ -115,7 +116,7 @@ public static class JsonObjectExtensions
                     case JsonValueKind.String:
                         return v.GetValue<string>().Length > 0;
                     case JsonValueKind.Number:
-                        return v.GetValue<double>() != 0;
+                        return NumberOf(v) != 0;
                     default:
                         return false;
                 }
@@ -146,6 +147,16 @@ public static class JsonObjectExtensions
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// A JSON number as a double, whatever .NET type holds it: parsed files hold JSON text, but
+    /// values set from code (new JsonObject { ["graceDays"] = 30 }) hold an int.
+    /// </summary>
+    public static double NumberOf(JsonValue value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return double.Parse(value.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture);
     }
 
     /// <summary>[int]$obj.name when the field is truthy, else null.</summary>
