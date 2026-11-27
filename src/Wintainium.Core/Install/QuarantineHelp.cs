@@ -36,6 +36,11 @@ public static partial class QuarantineHelp
         {
             log.Write("  (Run as administrator to see the detection name here.)", LogColor.DarkGray);
         }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or System.ComponentModel.Win32Exception or InvalidOperationException or IOException or AggregateException)
+        {
+            // the detection name is extra; the help below matters more
+            log.Write("  (Could not read the detection name from Windows Security.)", LogColor.DarkGray);
+        }
 
         log.Write("  Do not use \"Allow on device\": it allows the threat ID, which for a generic detection", LogColor.Yellow);
         log.Write("  also covers unrelated files. Avoid folder exclusions for the same reason.", LogColor.Yellow);

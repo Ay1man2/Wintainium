@@ -65,9 +65,10 @@ public sealed class FakeMark : IFileMark
     public string? Read(string file) => Marks.GetValueOrDefault(Path.GetFullPath(file));
 }
 
-public sealed class FakeThreats(ThreatDetection? detection, bool needsAdmin = false) : IThreatInfo
+public sealed class FakeThreats(ThreatDetection? detection, bool needsAdmin = false, Exception? fails = null) : IThreatInfo
 {
-    public ThreatDetection? FindRecent(string fileName) => needsAdmin ? throw new UnauthorizedAccessException() : detection;
+    public ThreatDetection? FindRecent(string fileName) =>
+        fails is not null ? throw fails : needsAdmin ? throw new UnauthorizedAccessException() : detection;
 }
 
 /// <summary>Records the program and arguments; runs an action in its place.</summary>

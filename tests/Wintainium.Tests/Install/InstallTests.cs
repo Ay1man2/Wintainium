@@ -99,6 +99,75 @@ public sealed class InstallTests : IDisposable
         Assert.Equal("new", File.ReadAllText(exe));
         Assert.True(File.Exists(Path.Combine(root, "readme.txt")));
         Assert.False(Directory.Exists(Path.Combine(root, "bin", "bin")));
+
+        // the folder that was written (Emu, not Emu\bin) is the one backed up
+        string backup = Assert.Single(Directory.GetDirectories(rig.Dir.File("apps"), "Emu.backup-*"));
+        Assert.Equal("old", File.ReadAllText(Path.Combine(backup, "bin", "emu.exe")));
+        Assert.Empty(Directory.GetDirectories(root, "bin.backup-*"));
+        Assert.Contains("the backup is of " + root, rig.Log.AllText, StringComparison.Ordinal);
+    }
+
+    [WindowsFact]
+    public async Task A_backup_that_fails_installs_nothing()
+    {
+        string exe = rig.Dir.Write("apps/Tool/Tool.exe", "old");
+        string locked = rig.Dir.Write("apps/Tool/in-use.dat", "x");
+        rig.Prompts.Confirms.Enqueue(true);
+        using (new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            Assert.False(await ZipInstaller.InstallAsync(Entry($$"""{ "name": "Tool", "exe": "{{Esc(exe)}}" }"""), ZipFileOf(("Tool.exe", "new")), rig.Ctx));
+        }
+
+        Assert.Equal("old", File.ReadAllText(exe));
+        Assert.Empty(Directory.GetDirectories(rig.Dir.File("apps"), "Tool.backup-*"));
+        Assert.Contains("Could not back up", rig.Log.AllText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Backups_sort_by_time_then_counter()
+    {
+        string dir = rig.Dir.File("apps/Tool");
+        Directory.CreateDirectory(dir);
+        foreach (string s in new[] { "20261127-1430-9", "20261127-1430-10", "20261127-1430" })
+        {
+            Directory.CreateDirectory(dir + ".backup-" + s);
+        }
+
+        IReadOnlyList<string> removed = ZipInstaller.PruneBackups(dir, 2, new MemoryLog());
+        Assert.Equal([dir + ".backup-20261127-1430"], removed);
+        Assert.True(Directory.Exists(dir + ".backup-20261127-1430-10"));
+    }
+
+    [Fact]
+    public async Task Cancelling_stops_the_running_program()
+    {
+        string file = OperatingSystem.IsWindows() ? Path.Combine(Environment.SystemDirectory, "ping.exe") : "/bin/sleep";
+        string[] args = OperatingSystem.IsWindows() ? ["-n", "60", "127.0.0.1"] : ["60"];
+        int pid = 0;
+        var runner = new ProcessRunner { Started = id => pid = id };
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunAsync(file, args, () => { }, TimeSpan.FromMilliseconds(100), cts.Token));
+        Assert.NotEqual(0, pid);
+        bool gone = false;
+        for (int i = 0; i < 50 && !gone; i++)
+        {
+            try
+            {
+                using var p = System.Diagnostics.Process.GetProcessById(pid);
+                gone = p.HasExited;
+            }
+            catch (ArgumentException)
+            {
+                gone = true;
+            }
+
+            if (!gone)
+            {
+                await Task.Delay(100);
+            }
+        }
+
+        Assert.True(gone, "the program kept running after cancel");
     }
 
     [Fact]
@@ -305,10 +374,10 @@ public sealed class InstallTests : IDisposable
     [Fact]
     public void EmuDeck_function_names_are_checked()
     {
-        Assert.True(EmuDeckBridge.IsInstallFunction("Yuzu_install"));
+        Assert.True(EmuDeckBridge.IsInstallFunction("PCSX2QT_install"));
         Assert.True(EmuDeckBridge.IsInstallFunction("ppsspp_install"));
-        Assert.False(EmuDeckBridge.IsInstallFunction("Yuzu_install; Remove-Item C:\\"));
-        Assert.False(EmuDeckBridge.IsInstallFunction("yuzu_uninstall2"));
+        Assert.False(EmuDeckBridge.IsInstallFunction("PCSX2QT_install; Remove-Item C:\\"));
+        Assert.False(EmuDeckBridge.IsInstallFunction("pcsx2qt_uninstall2"));
         Assert.False(EmuDeckBridge.IsInstallFunction(""));
     }
 

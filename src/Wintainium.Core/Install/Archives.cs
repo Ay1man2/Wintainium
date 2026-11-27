@@ -49,12 +49,14 @@ public static partial class Archives
     /// Returns the folder the files went into.
     /// </summary>
     public static async Task<string> ExpandToFolderAsync(string file, string dir, InstallContext ctx, string? exeName = null, CancellationToken cancel = default) =>
-        (await ExpandAsync(file, dir, ctx, exeName, cancel).ConfigureAwait(false)).Folder;
+        (await ExpandAsync(file, dir, ctx, exeName, cancel: cancel).ConfigureAwait(false))!.Folder;
 
     /// <summary>
     /// <see cref="ExpandToFolderAsync"/>, also returning the full path of every file it wrote.
+    /// <paramref name="prepare"/> is called with the folder the files will go into, before anything
+    /// is written there (to back it up); when it returns false nothing is written and null is returned.
     /// </summary>
-    public static async Task<UnpackResult> ExpandAsync(string file, string dir, InstallContext ctx, string? exeName = null, CancellationToken cancel = default)
+    public static async Task<UnpackResult?> ExpandAsync(string file, string dir, InstallContext ctx, string? exeName = null, Func<string, bool>? prepare = null, CancellationToken cancel = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         string tmp = Path.Combine(ctx.TempDir, "wintainium-" + Guid.NewGuid().ToString("N"));
@@ -84,6 +86,11 @@ public static partial class Archives
             }
 
             string target = TargetFolder(src, dir, exeName);
+            if (prepare is not null && !prepare(target))
+            {
+                return null;
+            }
+
             string? host = HostUrl(ctx.Mark.Read(file));
             var written = new List<string>();
             CopyTree(src, target, f =>

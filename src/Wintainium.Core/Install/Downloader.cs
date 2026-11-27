@@ -39,14 +39,16 @@ public sealed class Downloader(InstallContext ctx)
         }
 
         log.Write($"  Downloading {label}...");
-        if (File.Exists(file))
-        {
-            File.Delete(file);
-        }
-
         var watch = Stopwatch.StartNew();
+        long total = 0;
         try
         {
+            // an earlier download of the same name that is still open somewhere fails here, inside the try
+            if (File.Exists(file))
+            {
+                File.Delete(file);
+            }
+
             using var stall = CancellationTokenSource.CreateLinkedTokenSource(cancel);
             stall.CancelAfter(StallTimeout);
             using var req = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -56,7 +58,6 @@ public sealed class Downloader(InstallContext ctx)
             await using Stream body = await resp.Content.ReadAsStreamAsync(stall.Token).ConfigureAwait(false);
             await using var output = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.Read, 81920, useAsync: true);
             byte[] buffer = new byte[81920];
-            long total = 0;
             long lastShown = -1;
             int read;
             while ((read = await body.ReadAsync(buffer, stall.Token).ConfigureAwait(false)) > 0)
@@ -82,14 +83,19 @@ public sealed class Downloader(InstallContext ctx)
             return DownloadOutcome.Failed;
         }
 
-        log.Progress(string.Format(CultureInfo.InvariantCulture, "  downloaded {0}, {1} MB in {2}s", label, Math.Round(new FileInfo(file).Length / 1048576.0, 1), (int)watch.Elapsed.TotalSeconds));
-        try
+        // the byte count, not the file: Windows Security may already have removed it
+        log.Progress(string.Format(CultureInfo.InvariantCulture, "  downloaded {0}, {1} MB in {2}s", label, Math.Round(total / 1048576.0, 1), (int)watch.Elapsed.TotalSeconds));
+        if (File.Exists(file))
         {
-            ctx.Mark.Mark(file, shown);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
-        {
-            // the mark is a courtesy to SmartScreen; FAT32 or exFAT drives can't hold it
+            try
+            {
+                ctx.Mark.Mark(file, shown);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                // the mark is a courtesy to SmartScreen; FAT32 or exFAT drives can't hold it,
+                // and the file may be removed while the mark is written
+            }
         }
 
         await ctx.Delay(TimeSpan.FromMilliseconds(1500), cancel).ConfigureAwait(false);

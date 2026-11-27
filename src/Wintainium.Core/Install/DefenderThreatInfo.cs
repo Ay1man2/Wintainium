@@ -17,6 +17,9 @@ public sealed class DefenderThreatInfo : IThreatInfo
         "$d = Get-MpThreatDetection | Where-Object { \"$($_.Resources)\" -match [regex]::Escape($n) } | Sort-Object InitialDetectionTime -Descending | Select-Object -First 1; " +
         "if ($d) { $t = Get-MpThreat -ThreatID $d.ThreatID | Select-Object -First 1; [pscustomobject]@{ name = [string]$t.ThreatName; id = [long]$d.ThreatID } | ConvertTo-Json -Compress }";
 
+    /// <summary>How long the query may take before it is stopped.</summary>
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
+
     public ThreatDetection? FindRecent(string fileName)
     {
         var psi = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe"))
@@ -33,26 +36,49 @@ public sealed class DefenderThreatInfo : IThreatInfo
             psi.ArgumentList.Add(a);
         }
 
-        using Process p = Process.Start(psi) ?? throw new UnauthorizedAccessException();
+        using Process p = Process.Start(psi) ?? throw new InvalidOperationException("Could not start Windows PowerShell.");
         Task<string> err = p.StandardError.ReadToEndAsync();
-        string output = p.StandardOutput.ReadToEnd();
-        if (!p.WaitForExit(20000))
+        Task<string> outText = p.StandardOutput.ReadToEndAsync();
+        Task exited = p.WaitForExitAsync();
+
+        // both streams are read while waiting, so a full pipe can't hold the query up past the timeout
+        if (!Task.WaitAll([err, outText, exited], Timeout))
         {
-            p.Kill();
+            ProcessRunner.KillTree(p);
             return null;
         }
 
-        if (p.ExitCode != 0 || err.Result.Length > 0)
+        if (p.ExitCode != 0 || PowerShellStderr.IsError(err.Result))
         {
             // most often "access denied" without admin rights; the caller says to run as admin
             throw new UnauthorizedAccessException(err.Result);
         }
 
+        string output = outText.Result;
         if (output.Trim().Length == 0 || JsonNode.Parse(output) is not JsonObject o)
         {
             return null;
         }
 
         return new ThreatDetection(o.GetString("name"), long.TryParse(o.GetString("id"), out long id) ? id : 0);
+    }
+}
+
+/// <summary>Reading what Windows PowerShell wrote to stderr.</summary>
+internal static class PowerShellStderr
+{
+    /// <summary>
+    /// True when stderr holds an error. Windows PowerShell also writes progress records there as
+    /// "#&lt; CLIXML" text, which is not an error unless it holds an Error record.
+    /// </summary>
+    internal static bool IsError(string stderr)
+    {
+        string s = (stderr ?? "").Trim();
+        if (s.StartsWith("#< CLIXML", StringComparison.Ordinal))
+        {
+            return s.Contains("S=\"Error\"", StringComparison.Ordinal);
+        }
+
+        return s.Length > 0;
     }
 }
